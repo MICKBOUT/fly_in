@@ -1,13 +1,13 @@
 VENV		= .venv
 SRC_DIR		= src
-MAIN		= $(SRC_DIR)/__main__.py
+MAIN		= $(SRC_DIR)/main.py
 
 install:
 	uv sync
 
 run:
-	@echo "Running LLM..."
-	uv run -m src
+	@echo "Running fly-in..."
+	@uv run $(MAIN)
 
 lint: 
 	flake8 $(SRC_DIR)
@@ -19,11 +19,11 @@ lint-strict:
 
 debug:
 	@echo "Running in debug mode..."
-	uv run python -m pdb -m src
+	@uv run python -m pdb -m $(SRC_DIR)
 
 clean:
 	@echo "Cleaning project..."
-	@rm -f uv.lock
+	@uv clean
 	@rm -rf $(VENV)
 	@find . -type d -name "__pycache__" -exec rm -rf {} +
 	@find . -type d -name ".mypy_cache" -exec rm -rf {} +
