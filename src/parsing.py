@@ -1,5 +1,6 @@
 import re
 
+
 def read_metadata_connection(metadata_str: str) -> int:
     metadata_pattern = re.compile(r"max_link_capacity=(?P<value>\d+)")
 
@@ -8,6 +9,7 @@ def read_metadata_connection(metadata_str: str) -> int:
 
     match = metadata_pattern.search(metadata_str)
     return int(match.group("value")) if match else 1
+
 
 def read_metadata_node(metadata_str: str) -> dict:
     metadata_pattern = re.compile(r"(?P<key>zone|color|max_drones)=(?P<value>\w+)")
@@ -21,14 +23,15 @@ def read_metadata_node(metadata_str: str) -> dict:
     result
     if metadata_str is None:
         return result
-    
+
     for match in metadata_pattern.finditer(metadata_str):
         key = match.group("key")
         value = match.group("value")
         result[key] = value
-    
+
     result["max_drones"] = int(result["max_drones"])
     return result
+
 
 def parsing_file(path: str = "maps/easy/01_linear_path.txt"):
     import json
