@@ -10,12 +10,12 @@ run:
 	@uv run $(MAIN)
 
 lint: 
-	flake8 $(SRC_DIR)
-	mypy --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
+	uv run flake8 $(SRC_DIR)
+	uv run mypy --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
 
 lint-strict:
-	flake8 $(SRC_DIR)
-	mypy --strict
+	uv run flake8 $(SRC_DIR)
+	uv run mypy --strict
 
 debug:
 	@echo "Running in debug mode..."

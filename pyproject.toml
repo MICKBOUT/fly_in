@@ -14,12 +14,12 @@ classifiers = [
 ]
 
 dependencies = [
+    "flake8",
+    "mypy",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "flake8",
-    "mypy",
 ]
 
 [project.urls]

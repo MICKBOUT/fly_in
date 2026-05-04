@@ -10,17 +10,15 @@ resolution-markers = [
 name = "call-me-maybe"
 version = "1.0.0"
 source = { virtual = "." }
-
-[package.optional-dependencies]
-dev = [
+dependencies = [
     { name = "flake8" },
     { name = "mypy" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "flake8", marker = "extra == 'dev'" },
-    { name = "mypy", marker = "extra == 'dev'" },
+    { name = "flake8" },
+    { name = "mypy" },
 ]
 provides-extras = ["dev"]
 

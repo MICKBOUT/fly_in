@@ -8,6 +8,7 @@ class Drone:
     def __init__(self, start: str, drone_id: int) -> None:
         self.id: int = drone_id
         self.pos: str = start
+        self.wait_end_turn: int = 0
 
 
 class NodeData(TypedDict):
@@ -25,7 +26,6 @@ class LinkData(TypedDict):
     drone_count: int
 
 
-Movement = tuple[str, str]
 RouteData = tuple[int, list[str]]
 
 
@@ -34,6 +34,7 @@ class Graph:
         self.nb_drones: int = data["nb_drones"]
         self.start_hub: str = data["start_hub"]
         self.end_hub: str = data["end_hub"]
+        self.moving_drone: list[tuple[Drone, str]] = []
         self.nodes: dict[str, NodeData] = {
             key: {
                 "name": key,
@@ -51,7 +52,6 @@ class Graph:
         self.block_conection: dict[str, set[str]] = {
             key: set() for key in self.nodes
         }
-        self.movments: list[Movement] = []
 
         self.nodes[self.start_hub]["max_drones"] = float("inf")
         self.nodes[self.end_hub]["max_drones"] = float("inf")
@@ -104,23 +104,27 @@ class Graph:
         drone_data = self.nodes[next_node]
         return drone_data["drone_count"] + 1 <= drone_data["max_drones"]
 
-    def can_access_link(self, walking: Movement) -> bool:
-        node_start, node_end = walking
+    def can_access_link(self, node_start: str, node_end: str) -> bool:
         drone_data = self.neighbor[node_start][node_end]
         return drone_data["drone_count"] + 1 <= drone_data["capacity"]
 
     def simulate_drone(self, drone: Drone) -> str:
+        if drone.wait_end_turn > 0:
+            return ""
+
         queue: list[tuple[int, str]] = [(0, drone.pos)]
         routing: dict[str, RouteData] = {drone.pos: (0, [])}
 
         while queue:
             distance, pos = heapq.heappop(queue)
-            next_distance = distance + 1
 
             for next_node in self.neighbor[pos]:
+                next_distance = distance + 1
+                if self.nodes[next_node]["zone"] == "restricted":
+                    next_distance += 1
+
                 current_route = routing.get(next_node)
                 _, current_path = routing[pos]
-
                 if current_route is None or next_distance < current_route[0]:
                     routing[next_node] = (
                         next_distance,
@@ -133,46 +137,61 @@ class Graph:
             return ""
 
         next_node = path_to_end[1][0]
-        walking: Movement = (drone.pos, next_node)
-        if self.can_access_node(next_node) and self.can_access_link(walking):
+
+        if self.can_access_link(drone.pos, next_node):
+            ans = f"D{drone.id}-{next_node}"
             self.nodes[drone.pos]["drone_count"] -= 1
-            self.nodes[next_node]["drone_count"] += 1
             self.neighbor[drone.pos][next_node]["drone_count"] += 1
             self.neighbor[next_node][drone.pos]["drone_count"] += 1
-            self.movments.append(walking)
-            drone.pos = next_node
-            return f"D{drone.id}-{drone.pos}"
+            drone.wait_end_turn = 1
+            if self.nodes[next_node]["zone"] == "restricted":
+                drone.wait_end_turn = 2
 
+            self.nodes[next_node]["drone_count"] += 1
+            self.moving_drone.append((drone, next_node))
+            return ans
         return ""
 
     def simulate_drones(self) -> None:
         turn = [move for drone in self.drones
                 if (move := self.simulate_drone(drone))]
-        self.drones = [
-            drone for drone in self.drones if drone.pos != self.end_hub
-        ]
         output = " ".join(turn)
-        if output:
-            print(output)
+        print(output)
 
     def move_drone(self) -> None:
-        for node_1, node_2 in self.movments:
-            self.neighbor[node_1][node_2]["drone_count"] -= 1
-            self.neighbor[node_2][node_1]["drone_count"] -= 1
-        self.movments.clear()
+        """re-set the value where the drone pass to 0
+        """
+        left_over = []
+        for drone, next_node in self.moving_drone:
+            drone.wait_end_turn -= 1
+            if drone.wait_end_turn > 0:
+                left_over.append((drone, next_node))
+                continue
+            self.neighbor[drone.pos][next_node]["drone_count"] -= 1
+            self.neighbor[next_node][drone.pos]["drone_count"] -= 1
+            self.nodes[drone.pos]["drone_count"] -= 1
+            drone.pos = next_node
+        self.moving_drone = left_over
 
 
 def main() -> None:
     try:
-        data = parsing_file()
+        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
+        data = parsing_file("maps/hard/03_ultimate_challenge.txt")
     except Exception as error:
         print("Error:", error)
         return
 
     graph = Graph(data)
+    i = 0
     while graph.drones:
         graph.simulate_drones()
         graph.move_drone()
+        graph.drones = [
+            drone for drone in graph.drones if drone.pos != graph.end_hub
+        ]
+        i += 1
+    print(i)
 
 
 if __name__ == "__main__":

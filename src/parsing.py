@@ -133,10 +133,16 @@ def parsing_file(path: str = "maps/easy/01_linear_path.txt") -> ParsedData:
     if end_hub is None:
         raise ValueError("end_hub not found in the file")
 
-    return {
+    result: ParsedData = {
         "nb_drones": nb_drones,
         "start_hub": start_hub,
         "end_hub": end_hub,
         "hubs": hubs,
         "connections": connections,
     }
+    import json
+    # for debuging, rm at prod
+    with open("file.txt", "w") as f:
+        json.dump(result, f, indent=4)
+
+    return result
