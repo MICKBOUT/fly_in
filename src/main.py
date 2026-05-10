@@ -214,7 +214,6 @@ class Graph:
 
     def print_log(self,
                   paths: list[tuple[int, list[tuple[str, int]]]]) -> None:
-        print(paths)
         turns: list[list[str]] = [[] for _ in range(paths[-1][0])]
 
         for drone_id, path_data in enumerate(paths):
@@ -230,7 +229,7 @@ class Graph:
             s = " ".join(turn_list)
             if s:
                 print(s)
-        print(paths[-1][0])
+        print(f"all drone(s) found the exit in {len(turns)} turn(s)")
 
 
 def main() -> None:
