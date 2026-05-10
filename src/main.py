@@ -7,8 +7,6 @@ from parsing import ParsedData, parsing_file
 class Drone:
     def __init__(self, start: str, drone_id: int) -> None:
         self.id: int = drone_id
-        self.pos: str = start
-        self.wait_end_turn: int = 0
 
 
 class NodeData(TypedDict):
@@ -26,7 +24,9 @@ class LinkData(TypedDict):
     drone_count: int
 
 
-RouteData = tuple[int, list[str]]
+RouteData = tuple[int, list[tuple[str, int]]]
+State = tuple[str, int]
+LinkKey = tuple[str, str]
 
 
 class Graph:
@@ -100,98 +100,151 @@ class Graph:
             Drone(self.start_hub, index + 1) for index in range(self.nb_drones)
         ]
 
-    def can_access_node(self, next_node: str) -> bool:
-        drone_data = self.nodes[next_node]
-        return drone_data["drone_count"] + 1 <= drone_data["max_drones"]
+    def link_key(self, left: str, right: str) -> LinkKey:
+        if left < right:
+            return left, right
+        return right, left
 
-    def can_access_link(self, node_start: str, node_end: str) -> bool:
-        drone_data = self.neighbor[node_start][node_end]
-        return drone_data["drone_count"] + 1 <= drone_data["capacity"]
+    def move_cost(self, destination: str) -> int:
+        if self.nodes[destination]["zone"] == "restricted":
+            return 2
+        return 1
 
-    def simulate_drone(self, drone: Drone) -> str:
-        if drone.wait_end_turn > 0:
-            return ""
+    def link_is_available(self, left: str, right: str, turn: int) -> bool:
+        link_key = self.link_key(left, right)
+        capacity = self.neighbor[left][right]["capacity"]
+        current_count = self.link_reservation_table.get((link_key, turn), 0)
+        return current_count + 1 <= capacity
 
-        queue: list[tuple[int, str]] = [(0, drone.pos)]
-        routing: dict[str, RouteData] = {drone.pos: (0, [])}
+    def find_path(self) -> RouteData | None:
+        start_state = (self.start_hub, 0)
+        visited: set[State] = set()
+        queue: list[tuple[int, str]] = [(0, self.start_hub)]
+        parent: dict[State, State | None] = {
+            start_state: None
+        }
 
         while queue:
-            distance, pos = heapq.heappop(queue)
+            turn, pos = heapq.heappop(queue)
+            current_state = (pos, turn)
 
-            for next_node in self.neighbor[pos]:
-                next_distance = distance + 1
-                if self.nodes[next_node]["zone"] == "restricted":
-                    next_distance += 1
-
-                current_route = routing.get(next_node)
-                _, current_path = routing[pos]
-                if current_route is None or next_distance < current_route[0]:
-                    routing[next_node] = (
-                        next_distance,
-                        current_path + [next_node]
-                    )
-                    heapq.heappush(queue, (next_distance, next_node))
-
-        path_to_end = routing.get(self.end_hub)
-        if path_to_end is None or not path_to_end[1]:
-            return ""
-
-        next_node = path_to_end[1][0]
-
-        if self.can_access_link(drone.pos, next_node):
-            ans = f"D{drone.id}-{next_node}"
-            self.nodes[drone.pos]["drone_count"] -= 1
-            self.neighbor[drone.pos][next_node]["drone_count"] += 1
-            self.neighbor[next_node][drone.pos]["drone_count"] += 1
-            drone.wait_end_turn = 1
-            if self.nodes[next_node]["zone"] == "restricted":
-                drone.wait_end_turn = 2
-
-            self.nodes[next_node]["drone_count"] += 1
-            self.moving_drone.append((drone, next_node))
-            return ans
-        return ""
-
-    def simulate_drones(self) -> None:
-        turn = [move for drone in self.drones
-                if (move := self.simulate_drone(drone))]
-        output = " ".join(turn)
-        print(output)
-
-    def move_drone(self) -> None:
-        """re-set the value where the drone pass to 0
-        """
-        left_over = []
-        for drone, next_node in self.moving_drone:
-            drone.wait_end_turn -= 1
-            if drone.wait_end_turn > 0:
-                left_over.append((drone, next_node))
+            if current_state in visited:
                 continue
-            self.neighbor[drone.pos][next_node]["drone_count"] -= 1
-            self.neighbor[next_node][drone.pos]["drone_count"] -= 1
-            self.nodes[drone.pos]["drone_count"] -= 1
-            drone.pos = next_node
-        self.moving_drone = left_over
+            visited.add(current_state)
+
+            if pos == self.end_hub:
+                path = []
+                state: State | None = current_state
+                while state is not None:
+                    path.append(state)
+                    state = parent[state]
+                path.reverse()
+                return turn, path[1:]
+
+            # option move to a neighbor
+            for next_node in self.neighbor[pos]:
+
+                move_cost = self.move_cost(next_node)
+                next_turn = turn + move_cost
+                link_turn = turn + 1
+                destination_count = self.reservation_table.get(
+                    (next_node, next_turn), 0
+                )
+                if (
+                    destination_count + 1
+                    > self.nodes[next_node]["max_drones"]
+                ):
+                    continue
+                if not self.link_is_available(pos, next_node, link_turn):
+                    continue
+                state = (next_node, next_turn)
+
+                if state in visited:
+                    continue
+
+                if state not in parent:
+                    parent[state] = current_state
+
+                heapq.heappush(queue, (next_turn, next_node))
+
+            # wait on the current node
+            wait_state = (pos, turn + 1)
+
+            wait_count = self.reservation_table.get(wait_state, 0)
+            if wait_count + 1 <= self.nodes[pos]["max_drones"]:
+                if wait_state not in visited:
+                    parent[wait_state] = current_state
+                    heapq.heappush(queue, (turn + 1, pos))
+
+        return None
+
+    def reserve_path(self, path_data: RouteData) -> None:
+
+        _, path = path_data
+        states = [(self.start_hub, 0)] + path
+
+        for state in states:
+            self.reservation_table[state] = (
+                self.reservation_table.get(state, 0) + 1
+            )
+
+        for (left, left_turn), (right, _) in zip(states, states[1:]):
+            if left == right:
+                continue
+            link_key = self.link_key(left, right)
+            link_turn = left_turn + 1
+            link_state = (link_key, link_turn)
+            self.link_reservation_table[link_state] = (
+                self.link_reservation_table.get(link_state, 0) + 1
+            )
+
+    def routing(self) -> list[RouteData]:
+        self.reservation_table: dict[tuple[str, int], int] = {}
+        self.link_reservation_table: dict[tuple[LinkKey, int], int] = {}
+        paths = []
+
+        for drone in self.drones:
+            path = self.find_path()
+            if path is None:
+                raise Exception("No solution Found")
+            self.reserve_path(path)
+            paths.append(path)
+
+        return paths
+
+    def print_log(self,
+                  paths: list[tuple[int, list[tuple[str, int]]]]) -> None:
+        print(paths)
+        turns: list[list[str]] = [[] for _ in range(paths[-1][0])]
+
+        for drone_id, path_data in enumerate(paths):
+            pos = self.start_hub
+            for node_data in path_data[1]:
+                node, turn = node_data
+                if node == pos:
+                    continue
+                pos = node
+                turns[turn - 1].append(f"D{drone_id + 1}-{pos}")
+
+        for turn_list in turns:
+            s = " ".join(turn_list)
+            if s:
+                print(s)
+        print(paths[-1][0])
 
 
 def main() -> None:
     try:
-        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
-        data = parsing_file("maps/hard/03_ultimate_challenge.txt")
+        # data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
+        # data = parsing_file("maps/hard/03_ultimate_challenge.txt")
+        data = parsing_file()
     except Exception as error:
         print("Error:", error)
         return
 
     graph = Graph(data)
-    i = 0
-    while graph.drones:
-        graph.simulate_drones()
-        graph.move_drone()
-        graph.drones = [
-            drone for drone in graph.drones if drone.pos != graph.end_hub
-        ]
-        i += 1
-    print(i)
+    paths = graph.routing()
+    graph.print_log(paths)
 
 
 if __name__ == "__main__":
