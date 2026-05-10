@@ -4,11 +4,6 @@ from typing import TypedDict
 from parsing import ParsedData, parsing_file
 
 
-class Drone:
-    def __init__(self, start: str, drone_id: int) -> None:
-        self.id: int = drone_id
-
-
 class NodeData(TypedDict):
     name: str
     x: int
@@ -16,12 +11,6 @@ class NodeData(TypedDict):
     zone: str
     color: str | None
     max_drones: float
-    drone_count: int
-
-
-class LinkData(TypedDict):
-    capacity: int
-    drone_count: int
 
 
 RouteData = tuple[int, list[tuple[str, int]]]
@@ -34,7 +23,6 @@ class Graph:
         self.nb_drones: int = data["nb_drones"]
         self.start_hub: str = data["start_hub"]
         self.end_hub: str = data["end_hub"]
-        self.moving_drone: list[tuple[Drone, str]] = []
         self.nodes: dict[str, NodeData] = {
             key: {
                 "name": key,
@@ -42,20 +30,18 @@ class Graph:
                 "y": value["y"],
                 "zone": value["metadata"]["zone"],
                 "color": value["metadata"]["color"],
-                "max_drones": float(value["metadata"]["max_drones"]),
-                "drone_count": 0}
+                "max_drones": float(value["metadata"]["max_drones"])}
             for key, value in data["hubs"].items()
         }
-        self.neighbor: dict[str, dict[str, LinkData]] = {
+        self.neighbor: dict[str, dict[str, int]] = {
             key: {} for key in self.nodes
         }
-        self.block_conection: dict[str, set[str]] = {
+        blocked_connections: dict[str, set[str]] = {
             key: set() for key in self.nodes
         }
 
         self.nodes[self.start_hub]["max_drones"] = float("inf")
         self.nodes[self.end_hub]["max_drones"] = float("inf")
-        self.nodes[self.start_hub]["drone_count"] = self.nb_drones
 
         for connection in data["connections"]:
             left = connection["left"]
@@ -74,15 +60,15 @@ class Graph:
                 self.nodes[right]["zone"] == "blocked"
             ):
                 if (
-                    right in self.block_conection[left]
-                    or left in self.block_conection[right]
+                    right in blocked_connections[left]
+                    or left in blocked_connections[right]
                 ):
                     raise ValueError(
                         f"connection '{left}-{right}' "
                         "present multiple time in file"
                     )
-                self.block_conection[left].add(right)
-                self.block_conection[right].add(left)
+                blocked_connections[left].add(right)
+                blocked_connections[right].add(left)
                 continue
 
             if right in self.neighbor[left] or left in self.neighbor[right]:
@@ -91,14 +77,8 @@ class Graph:
                     "present multiple time in file"
                 )
 
-            self.neighbor[left][right] = {
-                "capacity": capacity, "drone_count": 0}
-            self.neighbor[right][left] = {
-                "capacity": capacity, "drone_count": 0}
-
-        self.drones: list[Drone] = [
-            Drone(self.start_hub, index + 1) for index in range(self.nb_drones)
-        ]
+            self.neighbor[left][right] = capacity
+            self.neighbor[right][left] = capacity
 
     def link_key(self, left: str, right: str) -> LinkKey:
         if left < right:
@@ -112,7 +92,7 @@ class Graph:
 
     def link_is_available(self, left: str, right: str, turn: int) -> bool:
         link_key = self.link_key(left, right)
-        capacity = self.neighbor[left][right]["capacity"]
+        capacity = self.neighbor[left][right]
         current_count = self.link_reservation_table.get((link_key, turn), 0)
         return current_count + 1 <= capacity
 
@@ -203,7 +183,7 @@ class Graph:
         self.link_reservation_table: dict[tuple[LinkKey, int], int] = {}
         paths = []
 
-        for drone in self.drones:
+        for _ in range(self.nb_drones):
             path = self.find_path()
             if path is None:
                 raise Exception("No solution Found")
@@ -218,11 +198,17 @@ class Graph:
 
         for drone_id, path_data in enumerate(paths):
             pos = self.start_hub
+            pos_turn = 0
             for node_data in path_data[1]:
                 node, turn = node_data
                 if node == pos:
+                    pos_turn = turn
                     continue
+                if self.move_cost(node) == 2:
+                    connection = f"{pos}-{node}"
+                    turns[pos_turn].append(f"D{drone_id + 1}-{connection}")
                 pos = node
+                pos_turn = turn
                 turns[turn - 1].append(f"D{drone_id + 1}-{pos}")
 
         for turn_list in turns:

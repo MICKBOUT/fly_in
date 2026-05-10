@@ -1,6 +1,8 @@
 import re
 from typing import TypedDict
 
+VALID_ZONE_TYPES = {"normal", "blocked", "restricted", "priority"}
+
 
 class MetadataDict(TypedDict):
     zone: str
@@ -35,7 +37,13 @@ def read_metadata_connection(metadata_str: str | None) -> int:
         return 1
 
     match = metadata_pattern.search(metadata_str)
-    return int(match.group("value")) if match else 1
+    if match is None:
+        return 1
+
+    capacity = int(match.group("value"))
+    if capacity <= 0:
+        raise ValueError("max_link_capacity must be a positive integer")
+    return capacity
 
 
 def read_metadata_node(metadata_str: str | None) -> MetadataDict:
@@ -55,11 +63,16 @@ def read_metadata_node(metadata_str: str | None) -> MetadataDict:
         value = match.group("value")
 
         if key == "zone":
+            if value not in VALID_ZONE_TYPES:
+                raise ValueError(f"invalid zone type '{value}'")
             result["zone"] = value
         elif key == "color":
             result["color"] = value
         else:
-            result["max_drones"] = int(value)
+            max_drones = int(value)
+            if max_drones <= 0:
+                raise ValueError("max_drones must be a positive integer")
+            result["max_drones"] = max_drones
 
     return result
 
@@ -140,9 +153,5 @@ def parsing_file(path: str = "maps/easy/01_linear_path.txt") -> ParsedData:
         "hubs": hubs,
         "connections": connections,
     }
-    import json
-    # for debuging, rm at prod
-    with open("file.txt", "w") as f:
-        json.dump(result, f, indent=4)
 
     return result
