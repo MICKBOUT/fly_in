@@ -9,6 +9,9 @@ run:
 	@echo "Running fly-in..."
 	@uv run $(MAIN)
 
+pygame:
+	@uv run $(SRC_DIR)/display.py
+
 lint: 
 	uv run flake8 $(SRC_DIR)
 	uv run mypy --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs
