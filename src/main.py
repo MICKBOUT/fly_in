@@ -2,6 +2,7 @@ import heapq
 from typing import TypedDict
 
 from parsing import ParsedData, parsing_file
+from display import Display
 
 
 class NodeData(TypedDict):
@@ -220,9 +221,9 @@ class Graph:
 
 def main() -> None:
     try:
-        # data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
+        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
         # data = parsing_file("maps/hard/03_ultimate_challenge.txt")
-        data = parsing_file()
+        # data = parsing_file()
     except Exception as error:
         print("Error:", error)
         return
@@ -230,6 +231,9 @@ def main() -> None:
     graph = Graph(data)
     paths = graph.routing()
     graph.print_log(paths)
+
+    display = Display(graph.nodes)
+    display.main()
 
 
 if __name__ == "__main__":
