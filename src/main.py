@@ -4,7 +4,9 @@ from parsing import ParsedData, parsing_file
 from display import Display
 from models import NodeData
 
-RouteData = tuple[int, list[tuple[str, int]]]
+PathStep = tuple[str, int]
+RouteData = tuple[int, list[PathStep]]
+RoutedPath = list[PathStep]
 State = tuple[str, int]
 LinkKey = tuple[str, str]
 
@@ -150,7 +152,7 @@ class Graph:
 
         return None
 
-    def reserve_path(self, path) -> None:
+    def reserve_path(self, path: RoutedPath) -> None:
 
         states = [(self.start_hub, 0)] + path
 
@@ -169,10 +171,10 @@ class Graph:
                 self.link_reservation_table.get(link_state, 0) + 1
             )
 
-    def routing(self) -> list[RouteData]:
+    def routing(self) -> list[RoutedPath]:
         self.reservation_table: dict[tuple[str, int], int] = {}
         self.link_reservation_table: dict[tuple[LinkKey, int], int] = {}
-        paths = []
+        paths: list[RoutedPath] = []
 
         for _ in range(self.nb_drones):
             path = self.find_path()
@@ -183,8 +185,7 @@ class Graph:
 
         return paths
 
-    def print_log(self,
-                  paths: list[tuple[int, list[tuple[str, int]]]]) -> None:
+    def print_log(self, paths: list[RoutedPath]) -> None:
         # change -1 -1 -1 to max (paths[x][-1][1])
         turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
 

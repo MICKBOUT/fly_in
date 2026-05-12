@@ -1,5 +1,4 @@
 from typing import Iterable, TypedDict
-import random
 
 import pygame
 
@@ -11,17 +10,29 @@ class ConnectionDisplayData(TypedDict):
     right: str
 
 
-class Drone:
+class Drone(pygame.sprite.Sprite):
     DRONE_PNG_PATH = "assets/drone.png"
+    IMG_SIZE = 512
+    TARGET_SIZE = 32
+    BASE_RESCALE = TARGET_SIZE / IMG_SIZE
 
-    def __init__(self, start_pos, path, drone_png: pygame.surface):
-        self.loaded_img = drone_png
-        self.scale_img = pygame.transform.scale_by(self.loaded_img, 1/8)
+    def __init__(self, start_pos: str, path: list[tuple[str, int]],
+                 drone_png: pygame.Surface) -> None:
+        super().__init__()
 
         self.pos = start_pos
         self.path = path
 
-        self.rect = self.scale_img.get_rect(center=(0, 0))
+        self.loaded_img = drone_png
+        self.image = pygame.transform.scale_by(
+            self.loaded_img, self.BASE_RESCALE)
+        self.rect = self.image.get_rect(center=(0, 0))
+
+    def update(self, zoom: float) -> None:
+        self.image = pygame.transform.scale_by(
+            self.loaded_img, self.BASE_RESCALE * zoom
+        )
+        self.rect = self.image.get_rect(center=self.rect.center)
 
 
 class Circle(NodeData):
@@ -29,7 +40,7 @@ class Circle(NodeData):
 
     def __init__(
             self, name: str, x: int, y: int, zone: str,
-            color: str | None, max_drones: int)  -> None:
+            color: str | None, max_drones: int) -> None:
         super().__init__(name, x * 100, y * 100, zone, color, max_drones)
 
         self.true_x, self.true_y = x, y
@@ -57,7 +68,7 @@ class Display:
 
     def __init__(self, hub_dict: dict[str, NodeData],
                  connections: Iterable[ConnectionDisplayData],
-                 paths: list[str],
+                 paths: list[list[tuple[str, int]]],
                  start_pos: str,
                  ) -> None:
         pygame.init()
@@ -99,7 +110,8 @@ class Display:
             -(self.screen_height / 2) + (sum_circle_y * 100 / len(self.hubs))
         ]  # * 100 bc the grid is scale by 100px for a better space b/w hub
 
-        self.drones = [Drone(start_pos, paths[i], drone_png) for i in range(len(paths))]
+        self.drones = pygame.sprite.Group(
+            *(Drone(start_pos, path, drone_png) for path in paths))
 
     def draw_circle_offset(self, circle: Circle, factor: float = 1.0) -> None:
         # colored part of the circle
@@ -125,13 +137,12 @@ class Display:
             int(5 * self.zoom),
         )
 
-    def draw_drone(self, drone: Drone):
+    def move_drone(self, drone: Drone) -> None:
         drone.rect.center = (
             self.world_to_screen(
                 self.hubs[drone.pos].x, self.hubs[drone.pos].y
             )
         )
-        self.screen.blit(drone.scale_img, drone.rect)
 
     def screen_to_world(self, pos: tuple[int, int]) -> tuple[float, float]:
         x, y = pos
@@ -142,8 +153,8 @@ class Display:
 
     def world_to_screen(self, x: int, y: int) -> tuple[int, int]:
         return (
-            (x - self.offset[0]) * self.zoom,
-            (y - self.offset[1]) * self.zoom
+            int((x - self.offset[0]) * self.zoom),
+            int((y - self.offset[1]) * self.zoom)
         )
 
     def zoom_at(self, screen_pos: tuple[int, int], factor: float) -> None:
@@ -227,6 +238,10 @@ class Display:
             if key_dict[pygame.K_w]:
                 self.offset[1] -= self.SPEED * dt
 
+            for drone in self.drones:
+                self.move_drone(drone)
+            self.drones.update(self.zoom)
+
             # display the background
             self.screen.fill(self.BACKGOUND_COLOR)
 
@@ -249,8 +264,7 @@ class Display:
                     self.draw_circle_offset(circle, factor=1.5)
 
             # draw drone
-            for drone in self.drones:
-                self.draw_drone(drone)
+            self.drones.draw(self.screen)
 
             # display fps count
             surface = self.font.render(fps_str, True, self.TEXT_ATH_COLOR)
