@@ -1,4 +1,5 @@
 from typing import Iterable, TypedDict
+import random
 
 import pygame
 
@@ -10,23 +11,38 @@ class ConnectionDisplayData(TypedDict):
     right: str
 
 
+class Drone:
+    DRONE_PNG_PATH = "assets/drone.png"
+
+    def __init__(self, start_pos, path, drone_png: pygame.surface):
+        self.loaded_img = drone_png
+        self.scale_img = pygame.transform.scale_by(self.loaded_img, 1/8)
+
+        self.pos = start_pos
+        self.path = path
+
+        self.rect = self.scale_img.get_rect(center=(0, 0))
+
+
 class Circle(NodeData):
-    radius = 25
+    RADIUS = 25
 
     def __init__(
             self, name: str, x: int, y: int, zone: str,
-            color: str | None, max_drones: float) -> None:
+            color: str | None, max_drones: int)  -> None:
         super().__init__(name, x * 100, y * 100, zone, color, max_drones)
 
+        self.true_x, self.true_y = x, y
         self.display_color: str = "white"
         # if the color is not valid, the the color to white
         if color is None:
             return
         try:
+            # if color not in {"rainbow"}: skip next line (allow custom color)
             pygame.Color(color)
             self.display_color = color
-        except (ValueError, TypeError):
-            self.display_color = "white"
+        except ValueError:
+            pass
 
 
 class Display:
@@ -40,22 +56,23 @@ class Display:
     LINK_COLOR = (206, 181, 167)
 
     def __init__(self, hub_dict: dict[str, NodeData],
-                 connections: Iterable[ConnectionDisplayData]) -> None:
+                 connections: Iterable[ConnectionDisplayData],
+                 paths: list[str],
+                 start_pos: str,
+                 ) -> None:
         pygame.init()
         pygame.display.set_caption("FLY IN !!!")
+
         self.font = pygame.font.SysFont("Arial", 48)
         self.screen = pygame.display.set_mode((0, 0), 0, vsync=1)
         self.clock = pygame.time.Clock()
+        self.zoom = 1.0
+        self.turn = 0
+
+        drone_png = pygame.image.load(Drone.DRONE_PNG_PATH).convert_alpha()
 
         self.screen_size = self.screen.get_size()
         self.screen_width, self.screen_height = self.screen_size
-
-        # pixels per second (was 960/60 per frame, now 960 per second)
-        self.zoom = 1.0
-
-        self.rnd_sample_size = 250
-
-        self.hubs: dict[str, Circle] = {}
 
         self.connections = {
             (lambda x, y: (x, y) if x < y else (y, x))
@@ -65,6 +82,7 @@ class Display:
 
         sum_circle_x = 0
         sum_circle_y = 0
+        self.hubs: dict[str, Circle] = {}
         for name, value in hub_dict.items():
             self.hubs[name] = Circle(
                 value.name,
@@ -72,52 +90,60 @@ class Display:
                 value.y,
                 value.zone,
                 value.color,
-                float(value.max_drones),
+                value.max_drones,
             )
             sum_circle_x += value.x
             sum_circle_y += value.y
         self.offset = [
             -(self.screen_width / 2) + (sum_circle_x * 100 / len(self.hubs)),
             -(self.screen_height / 2) + (sum_circle_y * 100 / len(self.hubs))
-        ]
+        ]  # * 100 bc the grid is scale by 100px for a better space b/w hub
 
-    def draw_circle_offset(self, circle: Circle) -> None:
+        self.drones = [Drone(start_pos, paths[i], drone_png) for i in range(len(paths))]
+
+    def draw_circle_offset(self, circle: Circle, factor: float = 1.0) -> None:
         # colored part of the circle
         pygame.draw.circle(
             self.screen, circle.display_color,
-            (
-                (circle.x - self.offset[0]) * self.zoom,
-                (circle.y - self.offset[1]) * self.zoom
-            ),
-            circle.radius * self.zoom
+            self.world_to_screen(circle.x, circle.y),
+            circle.RADIUS * self.zoom * factor
         )
         # white part of the circle
         pygame.draw.circle(
             self.screen, (self.PERIMETER_COLOR),
-            (
-                (circle.x - self.offset[0]) * self.zoom,
-                (circle.y - self.offset[1]) * self.zoom
-            ),
-            circle.radius * self.zoom,
+            self.world_to_screen(circle.x, circle.y),
+            circle.RADIUS * self.zoom * factor,
             int(5 * self.zoom),
         )
 
     def draw_line_offset(self, start: Circle, end: Circle) -> None:
         pygame.draw.line(
             self.screen,
-            self.LINK_COLOR, (
-                (start.x - self.offset[0]) * self.zoom,
-                (start.y - self.offset[1]) * self.zoom), (
-                (end.x - self.offset[0]) * self.zoom,
-                (end.y - self.offset[1]) * self.zoom),
+            self.LINK_COLOR,
+            self.world_to_screen(start.x, start.y),
+            self.world_to_screen(end.x, end.y),
             int(5 * self.zoom),
         )
+
+    def draw_drone(self, drone: Drone):
+        drone.rect.center = (
+            self.world_to_screen(
+                self.hubs[drone.pos].x, self.hubs[drone.pos].y
+            )
+        )
+        self.screen.blit(drone.scale_img, drone.rect)
 
     def screen_to_world(self, pos: tuple[int, int]) -> tuple[float, float]:
         x, y = pos
         return (
             self.offset[0] + (x / self.zoom),
             self.offset[1] + (y / self.zoom)
+        )
+
+    def world_to_screen(self, x: int, y: int) -> tuple[int, int]:
+        return (
+            (x - self.offset[0]) * self.zoom,
+            (y - self.offset[1]) * self.zoom
         )
 
     def zoom_at(self, screen_pos: tuple[int, int], factor: float) -> None:
@@ -140,15 +166,16 @@ class Display:
     def display_hub_info(self, circle: Circle) -> None:
         self.write_box = self.render_write(f"Name: {circle.name}")
         self.write_box = self.render_write(
-            f"Position (x, y): ({circle.x // 100}, {circle.x // 100})")
+            f"Position (x, y): ({circle.true_x}, {circle.true_y})")
         self.write_box = self.render_write(f"Zone: {circle.zone}")
         self.write_box = self.render_write(f"Color: {circle.color}")
         self.write_box = self.render_write(
-            f"Max drones: {int(circle.max_drones)}")
+            f"Max drones: {circle.max_drones}")
 
     def main(self) -> None:
         running = True
         dragging = False
+        mouse_over_circle = None
         mx, my = pygame.mouse.get_pos()
         while running:
             self.write_box = (0, 0)
@@ -211,19 +238,28 @@ class Display:
             for ell in self.hubs.values():
                 self.draw_circle_offset(ell)
 
+            # draw big hub
+            for circle in self.hubs.values():
+                if (
+                    ((circle.x - self.offset[0])*self.zoom - mx)**2 +
+                    ((circle.y - self.offset[1])*self.zoom - my)**2 <
+                    (circle.RADIUS * self.zoom)**2
+                ):
+                    mouse_over_circle = circle
+                    self.draw_circle_offset(circle, factor=1.5)
+
+            # draw drone
+            for drone in self.drones:
+                self.draw_drone(drone)
+
             # display fps count
             surface = self.font.render(fps_str, True, self.TEXT_ATH_COLOR)
             self.write_box = self.screen.blit(
                 surface, self.write_box).bottomleft
 
             # display the hub info at the top left of the screen
-            for hub in self.hubs.values():
-                if (
-                    ((hub.x - self.offset[0])*self.zoom - mx)**2 +
-                    ((hub.y - self.offset[1])*self.zoom - my)**2 <
-                    (hub.radius * self.zoom)**2
-                ):
-                    self.display_hub_info(hub)
+            if mouse_over_circle:
+                self.display_hub_info(circle)
 
             pygame.display.flip()
         pygame.quit()

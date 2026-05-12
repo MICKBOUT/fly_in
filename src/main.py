@@ -32,8 +32,8 @@ class Graph:
             key: set() for key in self.nodes
         }
 
-        self.nodes[self.start_hub].max_drones = float("inf")
-        self.nodes[self.end_hub].max_drones = float("inf")
+        self.nodes[self.start_hub].max_drones = self.nb_drones
+        self.nodes[self.end_hub].max_drones = self.nb_drones
 
         for connection in data["connections"]:
             left = connection["left"]
@@ -150,9 +150,8 @@ class Graph:
 
         return None
 
-    def reserve_path(self, path_data: RouteData) -> None:
+    def reserve_path(self, path) -> None:
 
-        _, path = path_data
         states = [(self.start_hub, 0)] + path
 
         for state in states:
@@ -179,19 +178,20 @@ class Graph:
             path = self.find_path()
             if path is None:
                 raise Exception("No solution Found")
-            self.reserve_path(path)
-            paths.append(path)
+            self.reserve_path(path[1])
+            paths.append(path[1])
 
         return paths
 
     def print_log(self,
                   paths: list[tuple[int, list[tuple[str, int]]]]) -> None:
-        turns: list[list[str]] = [[] for _ in range(paths[-1][0])]
+        # change -1 -1 -1 to max (paths[x][-1][1])
+        turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
 
         for drone_id, path_data in enumerate(paths):
             pos = self.start_hub
             pos_turn = 0
-            for node_data in path_data[1]:
+            for node_data in path_data:
                 node, turn = node_data
                 if node == pos:
                     pos_turn = turn
@@ -212,9 +212,9 @@ class Graph:
 
 def main() -> None:
     try:
-        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
+        # data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
         # data = parsing_file("maps/hard/03_ultimate_challenge.txt")
-        # data = parsing_file()
+        data = parsing_file()
     except Exception as error:
         print("Error:", error)
         return
@@ -222,8 +222,10 @@ def main() -> None:
     graph = Graph(data)
     paths = graph.routing()
     graph.print_log(paths)
+    for i in paths:
+        print(i)
 
-    display = Display(graph.nodes, data["connections"])
+    display = Display(graph.nodes, data["connections"], paths, graph.start_hub)
     display.main()
 
 
