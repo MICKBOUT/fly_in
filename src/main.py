@@ -212,9 +212,9 @@ class Graph:
 
 def main() -> None:
     try:
-        # data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
+        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
         # data = parsing_file("maps/hard/03_ultimate_challenge.txt")
-        data = parsing_file()
+        # data = parsing_file()
     except Exception as error:
         print("Error:", error)
         return

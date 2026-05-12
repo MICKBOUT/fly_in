@@ -34,6 +34,10 @@ class Display:
     MIN_ZOOM = 0.5
     MAX_ZOOM = 20
     SPEED = 960
+    BACKGOUND_COLOR = (91, 123, 122)
+    TEXT_ATH_COLOR = (0, 0, 0)
+    PERIMETER_COLOR = (161, 124, 107)
+    LINK_COLOR = (206, 181, 167)
 
     def __init__(self, hub_dict: dict[str, NodeData],
                  connections: Iterable[ConnectionDisplayData]) -> None:
@@ -89,7 +93,7 @@ class Display:
         )
         # white part of the circle
         pygame.draw.circle(
-            self.screen, "white",
+            self.screen, (self.PERIMETER_COLOR),
             (
                 (circle.x - self.offset[0]) * self.zoom,
                 (circle.y - self.offset[1]) * self.zoom
@@ -101,7 +105,7 @@ class Display:
     def draw_line_offset(self, start: Circle, end: Circle) -> None:
         pygame.draw.line(
             self.screen,
-            "white", (
+            self.LINK_COLOR, (
                 (start.x - self.offset[0]) * self.zoom,
                 (start.y - self.offset[1]) * self.zoom), (
                 (end.x - self.offset[0]) * self.zoom,
@@ -130,7 +134,8 @@ class Display:
         """rebder + write text on screen, return bottomleft of writed text
         """
         return self.screen.blit(
-            self.font.render(text, True, "Black"), self.write_box).bottomleft
+            self.font.render(
+                text, True, self.TEXT_ATH_COLOR), self.write_box).bottomleft
 
     def display_hub_info(self, circle: Circle) -> None:
         self.write_box = self.render_write(f"Name: {circle.name}")
@@ -138,7 +143,8 @@ class Display:
             f"Position (x, y): ({circle.x // 100}, {circle.x // 100})")
         self.write_box = self.render_write(f"Zone: {circle.zone}")
         self.write_box = self.render_write(f"Color: {circle.color}")
-        self.write_box = self.render_write(f"Max drones: {circle.max_drones}")
+        self.write_box = self.render_write(
+            f"Max drones: {int(circle.max_drones)}")
 
     def main(self) -> None:
         running = True
@@ -149,7 +155,6 @@ class Display:
             ticking = self.clock.tick()
             fps_str = str(int(self.clock.get_fps()))
             dt = ticking / 1000  # seconds since last frame, uncapped
-            self.screen.fill((64, 64, 96))
 
             for event in pygame.event.get():
                 match event.type:
@@ -195,8 +200,19 @@ class Display:
             if key_dict[pygame.K_w]:
                 self.offset[1] -= self.SPEED * dt
 
-            # display the fps count
-            surface = self.font.render(fps_str, True, "maroon")
+            # display the background
+            self.screen.fill(self.BACKGOUND_COLOR)
+
+            # draw line
+            for name_1, name_2 in self.connections:
+                self.draw_line_offset(self.hubs[name_1], self.hubs[name_2])
+
+            # draw hubs
+            for ell in self.hubs.values():
+                self.draw_circle_offset(ell)
+
+            # display fps count
+            surface = self.font.render(fps_str, True, self.TEXT_ATH_COLOR)
             self.write_box = self.screen.blit(
                 surface, self.write_box).bottomleft
 
@@ -208,14 +224,6 @@ class Display:
                     (hub.radius * self.zoom)**2
                 ):
                     self.display_hub_info(hub)
-
-            # draw line
-            for name_1, name_2 in self.connections:
-                self.draw_line_offset(self.hubs[name_1], self.hubs[name_2])
-
-            # draw hubs
-            for ell in self.hubs.values():
-                self.draw_circle_offset(ell)
 
             pygame.display.flip()
         pygame.quit()
