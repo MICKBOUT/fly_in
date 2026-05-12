@@ -232,7 +232,7 @@ def main() -> None:
     paths = graph.routing()
     graph.print_log(paths)
 
-    display = Display(graph.nodes)
+    display = Display(graph.nodes, data["connections"])
     display.main()
 
 

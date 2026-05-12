@@ -1,4 +1,3 @@
-import random
 from typing import Mapping, TypedDict
 
 import pygame
@@ -31,7 +30,7 @@ class Display:
     SPEED = 960
 
     def __init__(
-            self, hub_dict: Mapping[str, HubDisplayData]) -> None:
+            self, hub_dict: Mapping[str, HubDisplayData], connections) -> None:
         pygame.init()
         pygame.display.set_caption("FLY IN !!!")
         self.font = pygame.font.SysFont("Arial", 48)
@@ -45,15 +44,20 @@ class Display:
         self.zoom = 1.0
 
         self.rnd_sample_size = 250
-        self.rect_lst = self.gen_rect(self.rnd_sample_size)
 
-        self.hubs: list[Circle] = []
+        self.hubs: dict[str, Circle] = {}
+
+        self.connections = {
+            (lambda x, y: (x, y) if x < y else (y, x))
+            (connection["left"], connection["right"])
+            for connection in connections
+        }
 
         sum_circle_x = 0
         sum_circle_y = 0
         for value in hub_dict.values():
             color = value["color"] or "white"
-            self.hubs.append(Circle(
+            self.hubs[value["name"]] = (Circle(
                 value["x"] * 100,
                 value["y"] * 100,
                 25,
@@ -66,22 +70,8 @@ class Display:
             -(self.screen_height / 2) + (sum_circle_y * 100 / len(self.hubs))
         ]
 
-    @staticmethod
-    def gen_rect(nb: int) -> list[pygame.Rect]:
-        return [pygame.Rect(
-            (random.randint(-5000, 5000), random.randint(-5000, 5000)),
-            (random.randint(10, 500), random.randint(10, 500)))
-            for _ in range(nb)
-        ]
-
-    # def draw_rect_offset(self, rect: pygame.Rect, color: str) -> None:
-    #     pygame.draw.rect(self.screen, color, ((
-    #             (rect.left - self.offset[0]) * self.zoom,
-    #             (rect.top - self.offset[1]) * self.zoom),
-    #         (rect.w * self.zoom, rect.h * self.zoom)),
-    #     )
-
     def draw_circle_offset(self, circle: Circle) -> None:
+        # colored part of the circle
         pygame.draw.circle(
             self.screen, circle.color,
             (
@@ -90,6 +80,7 @@ class Display:
             ),
             circle.radius * self.zoom
         )
+        # white part of the circle
         pygame.draw.circle(
             self.screen, "white",
             (
@@ -98,6 +89,17 @@ class Display:
             ),
             circle.radius * self.zoom,
             int(5 * self.zoom),
+        )
+
+    def draw_line_offset(self, start: Circle, end: Circle) -> None:
+        pygame.draw.line(
+            self.screen,
+            "white", (
+                (start.x - self.offset[0]) * self.zoom,
+                (start.y - self.offset[1]) * self.zoom), (
+                (end.x - self.offset[0]) * self.zoom,
+                (end.y - self.offset[1]) * self.zoom),
+            5,
         )
 
     def screen_to_world(self, pos: tuple[int, int]) -> tuple[float, float]:
@@ -134,8 +136,6 @@ class Display:
                     case pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             running = False
-                        if event.key == pygame.K_r:
-                            self.rect_lst = self.gen_rect(self.rnd_sample_size)
 
                     case pygame.MOUSEBUTTONDOWN:
                         if event.button == 1:
@@ -174,7 +174,12 @@ class Display:
             if key_dict[pygame.K_w]:
                 self.offset[1] -= self.SPEED * dt
 
-            for ell in self.hubs:
+            # draw line
+            for name_1, name_2 in self.connections:
+                self.draw_line_offset(self.hubs[name_1], self.hubs[name_2])
+
+            # draw hubs
+            for ell in self.hubs.values():
                 self.draw_circle_offset(ell)
 
             surface = self.font.render(fps_str, True, "maroon")
