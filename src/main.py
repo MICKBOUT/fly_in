@@ -1,18 +1,8 @@
 import heapq
-from typing import TypedDict
 
 from parsing import ParsedData, parsing_file
 from display import Display
-
-
-class NodeData(TypedDict):
-    name: str
-    x: int
-    y: int
-    zone: str
-    color: str | None
-    max_drones: float
-
+from models import NodeData
 
 RouteData = tuple[int, list[tuple[str, int]]]
 State = tuple[str, int]
@@ -25,13 +15,14 @@ class Graph:
         self.start_hub: str = data["start_hub"]
         self.end_hub: str = data["end_hub"]
         self.nodes: dict[str, NodeData] = {
-            key: {
-                "name": key,
-                "x": value["x"],
-                "y": value["y"],
-                "zone": value["metadata"]["zone"],
-                "color": value["metadata"]["color"],
-                "max_drones": float(value["metadata"]["max_drones"])}
+            key: NodeData(
+                key,
+                value["x"],
+                value["y"],
+                value["metadata"]["zone"],
+                value["metadata"].get("color", ""),
+                value["metadata"]["max_drones"]
+            )
             for key, value in data["hubs"].items()
         }
         self.neighbor: dict[str, dict[str, int]] = {
@@ -41,8 +32,8 @@ class Graph:
             key: set() for key in self.nodes
         }
 
-        self.nodes[self.start_hub]["max_drones"] = float("inf")
-        self.nodes[self.end_hub]["max_drones"] = float("inf")
+        self.nodes[self.start_hub].max_drones = float("inf")
+        self.nodes[self.end_hub].max_drones = float("inf")
 
         for connection in data["connections"]:
             left = connection["left"]
@@ -57,8 +48,8 @@ class Graph:
                 raise ValueError(f"'{left}' hub is connected to itself")
 
             if (
-                self.nodes[left]["zone"] == "blocked" or
-                self.nodes[right]["zone"] == "blocked"
+                self.nodes[left].zone == "blocked" or
+                self.nodes[right].zone == "blocked"
             ):
                 if (
                     right in blocked_connections[left]
@@ -87,7 +78,7 @@ class Graph:
         return right, left
 
     def move_cost(self, destination: str) -> int:
-        if self.nodes[destination]["zone"] == "restricted":
+        if self.nodes[destination].zone == "restricted":
             return 2
         return 1
 
@@ -133,7 +124,7 @@ class Graph:
                 )
                 if (
                     destination_count + 1
-                    > self.nodes[next_node]["max_drones"]
+                    > self.nodes[next_node].max_drones
                 ):
                     continue
                 if not self.link_is_available(pos, next_node, link_turn):
@@ -152,7 +143,7 @@ class Graph:
             wait_state = (pos, turn + 1)
 
             wait_count = self.reservation_table.get(wait_state, 0)
-            if wait_count + 1 <= self.nodes[pos]["max_drones"]:
+            if wait_count + 1 <= self.nodes[pos].max_drones:
                 if wait_state not in visited:
                     parent[wait_state] = current_state
                     heapq.heappush(queue, (turn + 1, pos))
@@ -221,9 +212,9 @@ class Graph:
 
 def main() -> None:
     try:
-        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
+        # data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
         # data = parsing_file("maps/hard/03_ultimate_challenge.txt")
-        # data = parsing_file()
+        data = parsing_file()
     except Exception as error:
         print("Error:", error)
         return
