@@ -9,6 +9,7 @@ RouteData = tuple[int, list[PathStep]]
 RoutedPath = list[PathStep]
 State = tuple[str, int]
 LinkKey = tuple[str, str]
+QueueItem = tuple[int, int, str]
 
 
 class Graph:
@@ -84,6 +85,11 @@ class Graph:
             return 2
         return 1
 
+    def priority_bonus(self, node: str) -> int:
+        if self.nodes[node].zone == "priority":
+            return 1
+        return 0
+
     def link_is_available(self, left: str, right: str, turn: int) -> bool:
         link_key = self.link_key(left, right)
         capacity = self.neighbor[left][right]
@@ -93,15 +99,22 @@ class Graph:
     def find_path(self) -> RouteData | None:
         start_state = (self.start_hub, 0)
         visited: set[State] = set()
-        queue: list[tuple[int, str]] = [(0, self.start_hub)]
+        start_priority = self.priority_bonus(self.start_hub)
+        queue: list[QueueItem] = [(0, -start_priority, self.start_hub)]
+        best_priority: dict[State, int] = {
+            start_state: start_priority
+        }
         parent: dict[State, State | None] = {
             start_state: None
         }
 
         while queue:
-            turn, pos = heapq.heappop(queue)
+            turn, negative_priority, pos = heapq.heappop(queue)
+            priority_count = -negative_priority
             current_state = (pos, turn)
 
+            if priority_count < best_priority.get(current_state, -1):
+                continue
             if current_state in visited:
                 continue
             visited.add(current_state)
@@ -132,23 +145,27 @@ class Graph:
                 if not self.link_is_available(pos, next_node, link_turn):
                     continue
                 state = (next_node, next_turn)
+                next_priority = (
+                    priority_count + self.priority_bonus(next_node)
+                )
+                known_priority = best_priority.get(state, -1)
 
-                if state in visited:
+                if next_priority <= known_priority:
                     continue
 
-                if state not in parent:
-                    parent[state] = current_state
-
-                heapq.heappush(queue, (next_turn, next_node))
+                best_priority[state] = next_priority
+                parent[state] = current_state
+                heapq.heappush(queue, (next_turn, -next_priority, next_node))
 
             # wait on the current node
             wait_state = (pos, turn + 1)
-
             wait_count = self.reservation_table.get(wait_state, 0)
             if wait_count + 1 <= self.nodes[pos].max_drones:
-                if wait_state not in visited:
+                known_priority = best_priority.get(wait_state, -1)
+                if priority_count > known_priority:
+                    best_priority[wait_state] = priority_count
                     parent[wait_state] = current_state
-                    heapq.heappush(queue, (turn + 1, pos))
+                    heapq.heappush(queue, (turn + 1, -priority_count, pos))
 
         return None
 
