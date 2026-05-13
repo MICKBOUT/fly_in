@@ -1,4 +1,5 @@
-from typing import Iterable, TypedDict
+import math
+from typing import Callable, Iterable, TypedDict
 
 import pygame
 
@@ -15,50 +16,58 @@ class Drone(pygame.sprite.Sprite):
     IMG_SIZE = 512
     TARGET_SIZE = 32
     BASE_RESCALE = TARGET_SIZE / IMG_SIZE
+    DRONE_SPEED = 360  # en pixel par seconde
 
     def __init__(self, start_pos: str, path: list[tuple[str, int]],
                  drone_png: pygame.Surface,
-                 cls_mother: type["Display"]) -> None:
+                 waypoint_to_pos: Callable[[str], tuple[int, int]]) -> None:
         super().__init__()
 
-        self.cls_mother: type["Display"] = cls_mother
-        self.pos = self.target_pos = self.waypoint_to_pos(start_pos)
+        self.waypoint_to_pos = waypoint_to_pos
+        start_x, start_y = self.waypoint_to_pos(start_pos)
+        self.pos: tuple[float, float] = (float(start_x), float(start_y))
+        self.target_pos: tuple[float, float] = self.pos
 
         self.path = {turn: waypoint for waypoint, turn in path}
         self.path[0] = start_pos
+        for i in path:
+            print(i)
 
         self.loaded_img = drone_png
         self.image = pygame.transform.scale_by(
             self.loaded_img, self.BASE_RESCALE)
         self.rect = self.image.get_rect(center=(0, 0))
 
-    def update(self, zoom: float, turn: int) -> None:
+    def update(self, zoom: float, turn: int, dt: float) -> None:
         if turn in self.path:
             target_str = self.path[turn]
-            self.target_pos = self.waypoint_to_pos(target_str)
+            target_x, target_y = self.waypoint_to_pos(target_str)
+            self.target_pos = (float(target_x), float(target_y))
+        elif turn - 1 in self.path and turn + 1 in self.path:
+            target_a_x, target_a_y = self.waypoint_to_pos(self.path[turn - 1])
+            target_b_x, target_b_y = self.waypoint_to_pos(self.path[turn + 1])
+            self.target_pos = (
+                (target_a_x + target_b_x) / 2, (target_a_y + target_b_y) / 2
+            )
+        movement = dt * self.DRONE_SPEED
 
         if self.pos != self.target_pos:
             x, y = self.pos
             tx, ty = self.target_pos
+            dx = tx - x
+            dy = ty - y
+            distance = math.hypot(dx, dy)
 
-            if x < tx:
-                x += min(tx - x, 1)
-            elif x > tx:
-                x -= min(x - tx, 1)
-            if y < ty:
-                y += min(ty - y, 1)
-            elif y > ty:
-                y -= min(y - ty, 1)
-            self.pos = x, y
+            if distance <= movement:
+                self.pos = self.target_pos
+            elif distance > 0:
+                ratio = movement / distance
+                self.pos = (x + (dx * ratio), y + (dy * ratio))
 
         self.image = pygame.transform.scale_by(
             self.loaded_img, self.BASE_RESCALE * zoom
         )
         self.rect = self.image.get_rect(center=self.rect.center)
-
-    def waypoint_to_pos(self, waypoint: str) -> tuple[int, int]:
-        return (
-            self.cls_mother.hubs[waypoint].x, self.cls_mother.hubs[waypoint].y)
 
 
 class Circle(NodeData):
@@ -98,15 +107,17 @@ class Display:
                  connections: Iterable[ConnectionDisplayData],
                  paths: list[list[tuple[str, int]]],
                  start_pos: str,
+                 nb_turn: int
                  ) -> None:
         pygame.init()
         pygame.display.set_caption("FLY IN !!!")
 
         self.font = pygame.font.SysFont("Arial", 48)
-        self.screen = pygame.display.set_mode((0, 0), 0, vsync=1)
+        self.screen = pygame.display.set_mode((1920, 1080), 0, vsync=1)
         self.clock = pygame.time.Clock()
         self.zoom = 1.0
         self.turn = 0
+        self.nb_turn = nb_turn
 
         drone_png = pygame.image.load(Drone.DRONE_PNG_PATH).convert_alpha()
 
@@ -128,7 +139,8 @@ class Display:
         ]  # * 100 bc the grid is scale by 100px for a better space b/w hub
 
         self.drones = pygame.sprite.Group(
-            *(Drone(start_pos, path, drone_png, Display)for path in paths))
+            *(Drone(start_pos, path, drone_png, self.waypoint_to_pos)
+              for path in paths))
 
     @classmethod
     def init_hub(cls, hub_dict: dict[str, NodeData]) -> None:
@@ -168,11 +180,11 @@ class Display:
         )
 
     def move_drone_target(self, drone: Drone) -> None:
-        drone.rect.center = (
-            self.world_to_screen(
-                *drone.pos
-            )
-        )
+        drone.rect.center = (self.world_to_screen(*drone.pos))
+
+    def waypoint_to_pos(self, waypoint: str) -> tuple[int, int]:
+        circle = self.hubs[waypoint]
+        return circle.x, circle.y
 
     def screen_to_world(self, pos: tuple[int, int]) -> tuple[float, float]:
         x, y = pos
@@ -181,7 +193,7 @@ class Display:
             self.offset[1] + (y / self.zoom)
         )
 
-    def world_to_screen(self, x: int, y: int) -> tuple[int, int]:
+    def world_to_screen(self, x: float, y: float) -> tuple[int, int]:
         return (
             int((x - self.offset[0]) * self.zoom),
             int((y - self.offset[1]) * self.zoom)
@@ -231,10 +243,9 @@ class Display:
                     case pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             running = False
-                        if event.key == pygame.K_SPACE:
-                            self.turn += 1
-                        if event.key == pygame.K_RIGHT:
-                            self.turn += 1
+                        if event.key == pygame.K_SPACE or event.key == pygame.K_RIGHT:
+                            if self.turn < self.nb_turn:
+                                self.turn += 1
                         if event.key == pygame.K_LEFT:
                             if self.turn > 0:
                                 self.turn -= 1
@@ -272,9 +283,9 @@ class Display:
             if key_dict[pygame.K_w]:
                 self.offset[1] -= self.SPEED * dt
 
+            self.drones.update(self.zoom, self.turn, dt)
             for drone in self.drones:
                 self.move_drone_target(drone)
-            self.drones.update(self.zoom, self.turn)
 
             # display the background
             self.screen.fill(self.BACKGOUND_COLOR)

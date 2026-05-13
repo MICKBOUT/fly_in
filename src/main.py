@@ -185,7 +185,7 @@ class Graph:
 
         return paths
 
-    def print_log(self, paths: list[RoutedPath]) -> None:
+    def print_log(self, paths: list[RoutedPath]) -> int:
         # change -1 -1 -1 to max (paths[x][-1][1])
         turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
 
@@ -208,7 +208,9 @@ class Graph:
             s = " ".join(turn_list)
             if s:
                 print(s)
-        print(f"all drone(s) found the exit in {len(turns)} turn(s)")
+        nb_turn = len(turns)
+        print(f"all drone(s) found the exit in {nb_turn} turn(s)")
+        return nb_turn
 
 
 def main() -> None:
@@ -222,11 +224,10 @@ def main() -> None:
 
     graph = Graph(data)
     paths = graph.routing()
-    graph.print_log(paths)
-    for i in paths:
-        print(i)
+    nb_turn = graph.print_log(paths)
 
-    display = Display(graph.nodes, data["connections"], paths, graph.start_hub)
+    display = Display(
+        graph.nodes, data["connections"], paths, graph.start_hub, nb_turn)
     display.main()
 
 
