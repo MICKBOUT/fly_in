@@ -186,7 +186,6 @@ class Display:
             int((x - self.offset[0]) * self.zoom),
             int((y - self.offset[1]) * self.zoom)
         )
-        
 
     def zoom_at(self, screen_pos: tuple[int, int], factor: float) -> None:
         world_x, world_y = self.screen_to_world(screen_pos)
