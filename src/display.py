@@ -243,7 +243,10 @@ class Display:
                     case pygame.KEYDOWN:
                         if event.key == pygame.K_ESCAPE:
                             running = False
-                        if event.key == pygame.K_SPACE or event.key == pygame.K_RIGHT:
+                        if (
+                            event.key == pygame.K_SPACE or
+                            event.key == pygame.K_RIGHT
+                        ):
                             if self.turn < self.nb_turn:
                                 self.turn += 1
                         if event.key == pygame.K_LEFT:
