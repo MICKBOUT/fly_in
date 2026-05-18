@@ -13,6 +13,7 @@ class ConnectionDisplayData(TypedDict):
 
     left: str
     right: str
+    max_link_capacity: int
 
 
 class Drone(pygame.sprite.Sprite):
@@ -140,8 +141,9 @@ class Display:
         self.screen_width, self.screen_height = self.screen_size
 
         self.connections = {
-            (lambda x, y: (x, y) if x < y else (y, x))
-            (connection["left"], connection["right"])
+            (lambda x, y, z: (x, y, z) if x < y else (y, x, z))
+            (connection["left"], connection["right"],
+             connection['max_link_capacity'])
             for connection in connections
         }
 
@@ -187,14 +189,14 @@ class Display:
             int(5 * self.zoom),
         )
 
-    def draw_line_offset(self, start: Circle, end: Circle) -> None:
+    def draw_line_offset(self, start: Circle, end: Circle, size: int) -> None:
         """Draw one connection using the current camera transform."""
         pygame.draw.line(
             self.screen,
             self.LINK_COLOR,
             self.world_to_screen(start.x, start.y),
             self.world_to_screen(end.x, end.y),
-            int(5 * self.zoom),
+            int(2 * self.zoom * size),
         )
 
     def position_drones(self) -> None:
@@ -354,8 +356,9 @@ class Display:
             self.screen.fill(self.BACKGOUND_COLOR)
 
             # draw line
-            for name_1, name_2 in self.connections:
-                self.draw_line_offset(self.hubs[name_1], self.hubs[name_2])
+            for name_1, name_2, size in self.connections:
+                self.draw_line_offset(
+                    self.hubs[name_1], self.hubs[name_2], size)
 
             # draw hubs
             for ell in self.hubs.values():
