@@ -30,8 +30,6 @@ class Drone(pygame.sprite.Sprite):
 
         self.path = {turn: waypoint for waypoint, turn in path}
         self.path[0] = start_pos
-        for i in path:
-            print(i)
 
         self.loaded_img = drone_png
         self.image = pygame.transform.scale_by(
@@ -101,8 +99,6 @@ class Display:
     PERIMETER_COLOR = (161, 124, 107)
     LINK_COLOR = (206, 181, 167)
 
-    hubs: dict[str, Circle] = {}
-
     def __init__(self, hub_dict: dict[str, NodeData],
                  connections: Iterable[ConnectionDisplayData],
                  paths: list[list[tuple[str, int]]],
@@ -130,7 +126,7 @@ class Display:
             for connection in connections
         }
 
-        self.init_hub(hub_dict)
+        self.hubs = self.build_hubs(hub_dict)
         sum_circle_x = sum(circle.x for circle in self.hubs.values())
         sum_circle_y = sum(circle.y for circle in self.hubs.values())
         self.offset = [
@@ -142,11 +138,10 @@ class Display:
             *(Drone(start_pos, path, drone_png, self.waypoint_to_pos)
               for path in paths))
 
-    @classmethod
-    def init_hub(cls, hub_dict: dict[str, NodeData]) -> None:
-        cls.hubs = {}
+    def build_hubs(self, hub_dict: dict[str, NodeData]) -> dict[str, Circle]:
+        hubs: dict[str, Circle] = {}
         for name, value in hub_dict.items():
-            cls.hubs[name] = Circle(
+            hubs[name] = Circle(
                 value.name,
                 value.x,
                 value.y,
@@ -154,6 +149,7 @@ class Display:
                 value.color,
                 value.max_drones,
             )
+        return hubs
 
     def draw_circle_offset(self, circle: Circle, factor: float = 1.0) -> None:
         # colored part of the circle
@@ -179,8 +175,25 @@ class Display:
             int(5 * self.zoom),
         )
 
-    def move_drone_target(self, drone: Drone) -> None:
-        drone.rect.center = (self.world_to_screen(*drone.pos))
+    def position_drones(self) -> None:
+        drones_by_pos: dict[tuple[float, float], list[Drone]] = {}
+        for drone in self.drones:
+            pos_key = (round(drone.pos[0], 3), round(drone.pos[1], 3))
+            drones_by_pos.setdefault(pos_key, []).append(drone)
+
+        for pos_key, drones in drones_by_pos.items():
+            center_x, center_y = self.world_to_screen(*pos_key)
+            if len(drones) == 1:
+                drones[0].rect.center = (center_x, center_y)
+                continue
+
+            offset_radius = max(12, int(18 * self.zoom))
+            for index, drone in enumerate(drones):
+                angle = (2 * math.pi * index) / len(drones)
+                drone.rect.center = (
+                    center_x + int(math.cos(angle) * offset_radius),
+                    center_y + int(math.sin(angle) * offset_radius),
+                )
 
     def waypoint_to_pos(self, waypoint: str) -> tuple[int, int]:
         circle = self.hubs[waypoint]
@@ -287,8 +300,7 @@ class Display:
                 self.offset[1] -= self.SPEED * dt
 
             self.drones.update(self.zoom, self.turn, dt)
-            for drone in self.drones:
-                self.move_drone_target(drone)
+            self.position_drones()
 
             # display the background
             self.screen.fill(self.BACKGOUND_COLOR)
@@ -320,7 +332,7 @@ class Display:
               fps_str, True, self.TEXT_ATH_COLOR), self.write_box).bottomleft
             # display turn
             self.write_box = self.screen.blit(self.font.render(
-                    f"Trun: {self.turn}", True, self.TEXT_ATH_COLOR),
+                    f"Turn: {self.turn}", True, self.TEXT_ATH_COLOR),
                 self.write_box).bottomleft
 
             # display the hub info at the top left of the screen
@@ -329,5 +341,3 @@ class Display:
 
             pygame.display.flip()
         pygame.quit()
-
-# Coordinate

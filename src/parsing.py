@@ -20,7 +20,7 @@ class HubDict(TypedDict):
 class ConnectionDict(TypedDict):
     left: str
     right: str
-    max_link_capacity: int
+    max_link_capacity: int | None
 
 
 class ParsedData(TypedDict):
@@ -31,14 +31,14 @@ class ParsedData(TypedDict):
     connections: list[ConnectionDict]
 
 
-def read_metadata_connection(metadata_str: str | None) -> int:
+def read_metadata_connection(metadata_str: str | None) -> int | None:
     metadata_pattern = re.compile(r"max_link_capacity=(?P<value>\d+)")
     if metadata_str is None:
-        return 1
+        return None
 
     match = metadata_pattern.search(metadata_str)
     if match is None:
-        return 1
+        return None
 
     capacity = int(match.group("value"))
     if capacity <= 0:
