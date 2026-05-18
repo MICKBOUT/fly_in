@@ -1,5 +1,6 @@
 import heapq
 
+from chose_map import Display_Chooser, get_folder
 from parsing import ParsedData, parsing_file
 from display import Display
 from models import NodeData
@@ -232,9 +233,24 @@ class Graph:
 
 def main() -> None:
     try:
-        data = parsing_file("maps/challenger/01_the_impossible_dream.txt")
-        # data = parsing_file("maps/hard/03_ultimate_challenge.txt")
-        # data = parsing_file()
+        maps_dict = get_folder()
+    except FileNotFoundError:
+        print("Error: folder 'maps' not found")
+        return
+    except NotADirectoryError:
+        print("Error: The path is not a directory")
+        return
+    except (ValueError, Exception) as e:
+        print("Error", e)
+        return
+
+    screen = Display_Chooser(maps_dict)
+    map = screen.main()
+    if map is None:
+        return
+
+    try:
+        data = parsing_file(map)
     except Exception as error:
         print("Error:", error)
         return

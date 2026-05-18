@@ -113,7 +113,7 @@ class Display:
         pygame.display.set_caption("FLY IN !!!")
 
         self.font = pygame.font.SysFont("Arial", 48)
-        self.screen = pygame.display.set_mode((1920, 1080), 0, vsync=1)
+        self.screen = pygame.display.set_mode((0, 0), 0, vsync=1)
         self.clock = pygame.time.Clock()
         self.zoom = 1.0
         self.turn = 0
