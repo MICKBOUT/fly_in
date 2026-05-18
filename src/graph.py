@@ -41,8 +41,7 @@ class Graph:
         for connection in data["connections"]:
             left = connection["left"]
             right = connection["right"]
-            raw_capacity = connection["max_link_capacity"]
-            capacity = self.nb_drones if raw_capacity is None else raw_capacity
+            capacity = connection["max_link_capacity"]
 
             if left not in self.nodes:
                 raise ValueError(f"node '{left}' is not define as hub")

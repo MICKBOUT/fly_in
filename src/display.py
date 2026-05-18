@@ -80,12 +80,12 @@ class Circle(NodeData):
         super().__init__(name, x * 100, y * 100, zone, color, max_drones)
 
         self.true_x, self.true_y = x, y
+        self.is_rainbow = color == "rainbow"
         self.display_color: str = "white"
         # if the color is not valid, the the color to white
-        if color is None:
+        if color is None or self.is_rainbow:
             return
         try:
-            # if color not in {"rainbow"}: skip next line (allow custom color)
             pygame.Color(color)
             self.display_color = color
         except ValueError:
@@ -158,7 +158,7 @@ class Display:
     def draw_circle_offset(self, circle: Circle, factor: float = 1.0) -> None:
         # colored part of the circle
         pygame.draw.circle(
-            self.screen, circle.display_color,
+            self.screen, self.circle_color(circle),
             self.world_to_screen(circle.x, circle.y),
             circle.RADIUS * self.zoom * factor
         )
@@ -198,6 +198,19 @@ class Display:
                     center_x + int(math.cos(angle) * offset_radius),
                     center_y + int(math.sin(angle) * offset_radius),
                 )
+
+    def circle_color(self, circle: Circle) -> str | pygame.Color:
+        if not circle.is_rainbow:
+            return circle.display_color
+
+        rainbow_color = pygame.Color(0)
+        hue = (
+            (pygame.time.get_ticks() // 10) +
+            int(circle.true_x * 40) +
+            int(circle.true_y * 40)
+        ) % 360
+        rainbow_color.hsva = (hue, 90, 100, 100)
+        return rainbow_color
 
     def waypoint_to_pos(self, waypoint: str) -> tuple[int, int]:
         circle = self.hubs[waypoint]

@@ -22,7 +22,7 @@ lint-strict:
 
 debug:
 	@echo "Running in debug mode..."
-	@uv run python -m pdb -m $(SRC_DIR)
+	@uv run python -m pdb $(MAIN)
 
 clean:
 	@echo "Cleaning project..."
