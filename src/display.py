@@ -16,7 +16,7 @@ class Drone(pygame.sprite.Sprite):
     IMG_SIZE = 512
     TARGET_SIZE = 32
     BASE_RESCALE = TARGET_SIZE / IMG_SIZE
-    DRONE_SPEED = 360  # en pixel par seconde
+    DRONE_SPEED = 720  # en pixel par seconde
 
     def __init__(self, start_pos: str, path: list[tuple[str, int]],
                  drone_png: pygame.Surface,
@@ -67,6 +67,9 @@ class Drone(pygame.sprite.Sprite):
         )
         self.rect = self.image.get_rect(center=self.rect.center)
 
+    def is_at_target(self) -> bool:
+        return self.pos == self.target_pos
+
 
 class Circle(NodeData):
     RADIUS = 25
@@ -113,6 +116,7 @@ class Display:
         self.clock = pygame.time.Clock()
         self.zoom = 1.0
         self.turn = 0
+        self.requested_turn = 0
         self.nb_turn = nb_turn
 
         drone_png = pygame.image.load(Drone.DRONE_PNG_PATH).convert_alpha()
@@ -260,11 +264,11 @@ class Display:
                             event.key == pygame.K_SPACE or
                             event.key == pygame.K_RIGHT
                         ):
-                            if self.turn < self.nb_turn:
-                                self.turn += 1
+                            if self.requested_turn < self.nb_turn:
+                                self.requested_turn += 1
                         if event.key == pygame.K_LEFT:
-                            if self.turn > 0:
-                                self.turn -= 1
+                            if self.requested_turn > 0:
+                                self.requested_turn -= 1
 
                     case pygame.MOUSEBUTTONDOWN:
                         if event.button == 1:
@@ -298,6 +302,12 @@ class Display:
                 self.offset[1] += self.SPEED * dt
             if key_dict[pygame.K_w]:
                 self.offset[1] -= self.SPEED * dt
+
+            if all(drone.is_at_target() for drone in self.drones):
+                if self.turn < self.requested_turn:
+                    self.turn += 1
+                elif self.turn > self.requested_turn:
+                    self.turn -= 1
 
             self.drones.update(self.zoom, self.turn, dt)
             self.position_drones()
