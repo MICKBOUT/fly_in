@@ -1,3 +1,5 @@
+"""Pygame rendering and animation for the Fly-In simulation."""
+
 import math
 from typing import Callable, Iterable, TypedDict
 
@@ -7,11 +9,15 @@ from models import NodeData
 
 
 class ConnectionDisplayData(TypedDict):
+    """Minimal connection data required by the display."""
+
     left: str
     right: str
 
 
 class Drone(pygame.sprite.Sprite):
+    """Sprite used to animate one routed drone."""
+
     DRONE_PNG_PATH = "assets/drone.png"
     IMG_SIZE = 512
     TARGET_SIZE = 32
@@ -21,6 +27,7 @@ class Drone(pygame.sprite.Sprite):
     def __init__(self, start_pos: str, path: list[tuple[str, int]],
                  drone_png: pygame.Surface,
                  waypoint_to_pos: Callable[[str], tuple[int, int]]) -> None:
+        """Create one drone sprite from a routed path."""
         super().__init__()
 
         self.waypoint_to_pos = waypoint_to_pos
@@ -37,6 +44,7 @@ class Drone(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=(0, 0))
 
     def update(self, zoom: float, turn: int, dt: float) -> None:
+        """Advance the drone toward its target for the current turn."""
         if turn in self.path:
             target_str = self.path[turn]
             target_x, target_y = self.waypoint_to_pos(target_str)
@@ -68,21 +76,25 @@ class Drone(pygame.sprite.Sprite):
         self.rect = self.image.get_rect(center=self.rect.center)
 
     def is_at_target(self) -> bool:
+        """Return whether the drone reached its current target."""
         return self.pos == self.target_pos
 
 
 class Circle(NodeData):
+    """Display-specific hub data with precomputed render settings."""
+
     RADIUS = 25
 
     def __init__(
             self, name: str, x: int, y: int, zone: str,
             color: str | None, max_drones: int) -> None:
+        """Build a drawable hub from graph node data."""
         super().__init__(name, x * 100, y * 100, zone, color, max_drones)
 
         self.true_x, self.true_y = x, y
         self.is_rainbow = color == "rainbow"
         self.display_color: str = "white"
-        # if the color is not valid, the the color to white
+        # If the color is invalid, fall back to white.
         if color is None or self.is_rainbow:
             return
         try:
@@ -93,6 +105,8 @@ class Circle(NodeData):
 
 
 class Display:
+    """Render the map, hubs, and drone animation in Pygame."""
+
     ZOOM_STEP = 1.25
     MIN_ZOOM = 0.5
     MAX_ZOOM = 20
@@ -108,6 +122,7 @@ class Display:
                  start_pos: str,
                  nb_turn: int
                  ) -> None:
+        """Initialize the display and build all render objects."""
         pygame.init()
         pygame.display.set_caption("FLY IN !!!")
 
@@ -143,6 +158,7 @@ class Display:
               for path in paths))
 
     def build_hubs(self, hub_dict: dict[str, NodeData]) -> dict[str, Circle]:
+        """Convert graph nodes into display circles."""
         hubs: dict[str, Circle] = {}
         for name, value in hub_dict.items():
             hubs[name] = Circle(
@@ -156,6 +172,7 @@ class Display:
         return hubs
 
     def draw_circle_offset(self, circle: Circle, factor: float = 1.0) -> None:
+        """Draw one hub using the current camera transform."""
         # colored part of the circle
         pygame.draw.circle(
             self.screen, self.circle_color(circle),
@@ -171,6 +188,7 @@ class Display:
         )
 
     def draw_line_offset(self, start: Circle, end: Circle) -> None:
+        """Draw one connection using the current camera transform."""
         pygame.draw.line(
             self.screen,
             self.LINK_COLOR,
@@ -180,6 +198,7 @@ class Display:
         )
 
     def position_drones(self) -> None:
+        """Place drone sprites on screen after their world update."""
         drones_by_pos: dict[tuple[float, float], list[Drone]] = {}
         for drone in self.drones:
             pos_key = (round(drone.pos[0], 3), round(drone.pos[1], 3))
@@ -200,6 +219,7 @@ class Display:
                 )
 
     def circle_color(self, circle: Circle) -> str | pygame.Color:
+        """Return the current render color of a hub."""
         if not circle.is_rainbow:
             return circle.display_color
 
@@ -213,10 +233,12 @@ class Display:
         return rainbow_color
 
     def waypoint_to_pos(self, waypoint: str) -> tuple[int, int]:
+        """Resolve one hub name to its world-space position."""
         circle = self.hubs[waypoint]
         return circle.x, circle.y
 
     def screen_to_world(self, pos: tuple[int, int]) -> tuple[float, float]:
+        """Convert screen coordinates into world coordinates."""
         x, y = pos
         return (
             self.offset[0] + (x / self.zoom),
@@ -224,12 +246,14 @@ class Display:
         )
 
     def world_to_screen(self, x: float, y: float) -> tuple[int, int]:
+        """Convert world coordinates into screen coordinates."""
         return (
             int((x - self.offset[0]) * self.zoom),
             int((y - self.offset[1]) * self.zoom)
         )
 
     def zoom_at(self, screen_pos: tuple[int, int], factor: float) -> None:
+        """Zoom while keeping one screen position anchored."""
         world_x, world_y = self.screen_to_world(screen_pos)
         new_zoom = max(self.MIN_ZOOM, min(self.MAX_ZOOM, self.zoom * factor))
         if new_zoom == self.zoom:
@@ -240,13 +264,13 @@ class Display:
         self.offset[1] = world_y - (screen_pos[1] / self.zoom)
 
     def render_write(self, text: str) -> tuple[int, int]:
-        """rebder + write text on screen, return bottomleft of writed text
-        """
+        """Render HUD text and return the next write position."""
         return self.screen.blit(
             self.font.render(
                 text, True, self.TEXT_ATH_COLOR), self.write_box).bottomleft
 
     def display_hub_info(self, circle: Circle) -> None:
+        """Render the hovered hub details in the HUD."""
         self.write_box = self.render_write(f"Name: {circle.name}")
         self.write_box = self.render_write(
             f"Position (x, y): ({circle.true_x}, {circle.true_y})")
@@ -256,6 +280,7 @@ class Display:
             f"Max drones: {circle.max_drones}")
 
     def main(self) -> None:
+        """Run the main render and input loop."""
         running = True
         dragging = False
         mx, my = pygame.mouse.get_pos()

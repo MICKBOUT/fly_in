@@ -1,3 +1,5 @@
+"""Application entrypoint for the Fly-In project."""
+
 from chose_map import Display_Chooser, get_folder
 from display import Display
 from graph import Graph
@@ -5,6 +7,7 @@ from parsing import parsing_file
 
 
 def main() -> None:
+    """Run the map chooser, parser, router, and display loop."""
     try:
         maps_dict = get_folder()
     except FileNotFoundError:

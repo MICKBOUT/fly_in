@@ -1,3 +1,5 @@
+"""Map chooser UI used before running the simulation."""
+
 from pathlib import Path
 
 import pygame
@@ -7,6 +9,7 @@ MapFolders = dict[str, list[str]]
 
 
 def get_folder(path: str = "maps") -> MapFolders:
+    """Return available map files grouped by folder path."""
     root = Path(path)
     if not root.exists():
         raise FileNotFoundError(path)
@@ -29,6 +32,8 @@ def get_folder(path: str = "maps") -> MapFolders:
 
 
 class Display_Chooser:
+    """Display a simple menu to pick one map file."""
+
     BACKGOUND_COLOR = (91, 123, 122)
     BORDER_COLOR = (161, 124, 107)
     RECT_COLOR = (206, 181, 167)
@@ -42,6 +47,7 @@ class Display_Chooser:
     BACK_ICON_PADDING = 32
 
     def __init__(self, maps_dict: MapFolders) -> None:
+        """Initialize the chooser window and its cached layout."""
         pygame.init()
         pygame.display.set_caption("choose the maps")
 
@@ -70,6 +76,7 @@ class Display_Chooser:
         )
 
     def build_button_rects(self, labels: list[str]) -> dict[str, pygame.Rect]:
+        """Build centered button rectangles for a list of labels."""
         rects: dict[str, pygame.Rect] = {}
         top = self.PADDING
         left = (self.screen_width - self.BUTTON_WIDTH) // 2
@@ -84,32 +91,38 @@ class Display_Chooser:
         return rects
 
     def draw_button(self, is_hovered: bool, rect: pygame.Rect) -> None:
+        """Draw one chooser button with hover feedback."""
         fill_color = self.BORDER_COLOR if is_hovered else self.RECT_COLOR
         border_color = self.RECT_COLOR if is_hovered else self.BORDER_COLOR
         pygame.draw.rect(self.screen, fill_color, rect)
         pygame.draw.rect(self.screen, border_color, rect, self.RECT_BORDER)
 
     def draw_label(self, label: str, rect: pygame.Rect) -> None:
+        """Draw centered text inside a chooser button."""
         render = self.font.render(label, True, self.TEXT_ATH_COLOR)
         text_x = rect.centerx - (render.get_width() // 2)
         text_y = rect.centery - (render.get_height() // 2)
         self.screen.blit(render, (text_x, text_y))
 
     def open_folder(self, folder_name: str) -> None:
+        """Switch the UI to the file list of one folder."""
         self.selected_folder = folder_name
         self.file_rects = self.build_button_rects(self.maps_dict[folder_name])
 
     def close_folder(self) -> None:
+        """Return from the file view to the folder view."""
         self.selected_folder = None
         self.file_rects = {}
 
     def handle_folder_click(self, mouse_pos: tuple[int, int]) -> None:
+        """Open the clicked folder, if any."""
         for folder_name, rect in self.folder_rects.items():
             if rect.collidepoint(mouse_pos):
                 self.open_folder(folder_name)
                 return
 
     def handle_file_click(self, mouse_pos: tuple[int, int]) -> str | None:
+        """Handle clicks in file view and return the chosen map."""
         if self.back_rect.collidepoint(mouse_pos):
             self.close_folder()
             return None
@@ -120,11 +133,13 @@ class Display_Chooser:
         return None
 
     def draw_folder_view(self, mouse_pos: tuple[int, int]) -> None:
+        """Render the top-level folder selection view."""
         for folder_name, rect in self.folder_rects.items():
             self.draw_button(rect.collidepoint(mouse_pos), rect)
             self.draw_label(Path(folder_name).name, rect)
 
     def draw_file_view(self, mouse_pos: tuple[int, int]) -> None:
+        """Render the list of maps inside the selected folder."""
         for file_name, rect in self.file_rects.items():
             self.draw_button(rect.collidepoint(mouse_pos), rect)
             self.draw_label(Path(file_name).name, rect)
@@ -142,6 +157,7 @@ class Display_Chooser:
         )
 
     def main(self) -> str | None:
+        """Run the chooser loop and return the selected map path."""
         running = True
         selected_map: str | None = None
 

@@ -1,3 +1,5 @@
+"""Graph building and routing logic for the Fly-In simulation."""
+
 import heapq
 
 from models import NodeData
@@ -8,12 +10,15 @@ RouteData = tuple[int, list[PathStep]]
 RoutedPath = list[PathStep]
 State = tuple[str, int]
 LinkKey = tuple[str, str]
-PathScore = tuple[float, int]
-QueueItem = tuple[int, float, int, str]
+PathScore = tuple[int, float, int]
+QueueItem = tuple[int, int, float, int, str]
 
 
 class Graph:
+    """Build the routing graph and compute drone paths."""
+
     def __init__(self, data: ParsedData) -> None:
+        """Create the graph from parsed map data."""
         self.nb_drones = data["nb_drones"]
         self.start_hub = data["start_hub"]
         self.end_hub = data["end_hub"]
@@ -76,27 +81,32 @@ class Graph:
             self.neighbor[right][left] = capacity
 
     def link_key(self, left: str, right: str) -> LinkKey:
+        """Return the normalized key for an undirected link."""
         if left < right:
             return left, right
         return right, left
 
     def move_cost(self, destination: str) -> int:
+        """Return the number of turns needed to enter a node."""
         if self.nodes[destination].zone == "restricted":
             return 2
         return 1
 
     def priority_bonus(self, node: str) -> int:
+        """Return the path bonus granted by a priority node."""
         if self.nodes[node].zone == "priority":
             return 1
         return 0
 
     def link_is_available(self, left: str, right: str, turn: int) -> bool:
+        """Check whether a link still has room on a given turn."""
         link_key = self.link_key(left, right)
         capacity = self.neighbor[left][right]
         current_count = self.link_reservation_table.get((link_key, turn), 0)
         return current_count + 1 <= capacity
 
     def congestion_cost(self, left: str, right: str, next_turn: int) -> float:
+        """Estimate congestion added by using one move."""
         link_key = self.link_key(left, right)
         link_turn = next_turn - self.move_cost(right) + 1
         node_capacity = max(self.nodes[right].max_drones, 1)
@@ -106,34 +116,73 @@ class Graph:
         link_load = self.link_reservation_table.get((link_key, link_turn), 0)
         return (node_load / node_capacity) + (link_load / link_capacity)
 
+    def movement_penalty(
+        self,
+        current_state: State,
+        parent: dict[State, State | None],
+        next_node: str,
+    ) -> int:
+        """Score a move so waiting beats useless detours on equal turns."""
+        previous_state = parent[current_state]
+        if previous_state is None:
+            return 0
+
+        penalty = 0
+        previous_node, _ = previous_state
+        if next_node == previous_node:
+            penalty += 2
+
+        ancestor: State | None = previous_state
+        while ancestor is not None:
+            ancestor_node, _ = ancestor
+            if ancestor_node == next_node:
+                penalty += 1
+                break
+            ancestor = parent[ancestor]
+
+        return penalty
+
     def find_path(self) -> RouteData | None:
+        """Find one path while respecting current reservations."""
         start_state = (self.start_hub, 0)
         visited: set[State] = set()
         start_priority = self.priority_bonus(self.start_hub)
-        queue: list[QueueItem] = [(0, 0.0, -start_priority, self.start_hub)]
+        queue: list[QueueItem] = [
+            (0, 0, 0.0, -start_priority, self.start_hub)
+        ]
         best_score: dict[State, PathScore] = {
-            start_state: (0.0, start_priority)
+            start_state: (0, 0.0, start_priority)
         }
         parent: dict[State, State | None] = {
             start_state: None
         }
 
         while queue:
-            turn, congestion_score, negative_priority, pos = heapq.heappop(
-                queue
-            )
+            (
+                turn,
+                detour_score,
+                congestion_score,
+                negative_priority,
+                pos,
+            ) = heapq.heappop(queue)
             priority_count = -negative_priority
             current_state = (pos, turn)
 
-            best_congestion, best_priority = best_score.get(
+            best_detour, best_congestion, best_priority = best_score.get(
                 current_state,
-                (float("inf"), -1),
+                (10**9, float("inf"), -1),
             )
             if (
-                congestion_score > best_congestion or
+                detour_score > best_detour or
                 (
-                    congestion_score == best_congestion and
-                    priority_count < best_priority
+                    detour_score == best_detour and
+                    (
+                        congestion_score > best_congestion or
+                        (
+                            congestion_score == best_congestion and
+                            priority_count < best_priority
+                        )
+                    )
                 )
             ):
                 continue
@@ -163,29 +212,50 @@ class Graph:
                     continue
 
                 state = (next_node, next_turn)
+                next_detour = (
+                    detour_score +
+                    self.movement_penalty(current_state, parent, next_node)
+                )
                 next_congestion = (
                     congestion_score +
                     self.congestion_cost(pos, next_node, next_turn)
                 )
                 next_priority = priority_count + self.priority_bonus(next_node)
-                known_congestion, known_priority = best_score.get(
-                    state,
-                    (float("inf"), -1),
-                )
+                (
+                    known_detour,
+                    known_congestion,
+                    known_priority,
+                ) = best_score.get(state, (10**9, float("inf"), -1))
                 if (
-                    next_congestion > known_congestion or
+                    next_detour > known_detour or
                     (
-                        next_congestion == known_congestion and
-                        next_priority <= known_priority
+                        next_detour == known_detour and
+                        (
+                            next_congestion > known_congestion or
+                            (
+                                next_congestion == known_congestion and
+                                next_priority <= known_priority
+                            )
+                        )
                     )
                 ):
                     continue
 
-                best_score[state] = (next_congestion, next_priority)
+                best_score[state] = (
+                    next_detour,
+                    next_congestion,
+                    next_priority,
+                )
                 parent[state] = current_state
                 heapq.heappush(
                     queue,
-                    (next_turn, next_congestion, -next_priority, next_node),
+                    (
+                        next_turn,
+                        next_detour,
+                        next_congestion,
+                        -next_priority,
+                        next_node,
+                    ),
                 )
 
             wait_state = (pos, turn + 1)
@@ -198,27 +268,45 @@ class Graph:
                         max(self.nodes[pos].max_drones, 1)
                     )
                 )
-                known_congestion, known_priority = best_score.get(
-                    wait_state,
-                    (float("inf"), -1),
-                )
+                (
+                    known_detour,
+                    known_congestion,
+                    known_priority,
+                ) = best_score.get(wait_state, (10**9, float("inf"), -1))
                 if (
-                    wait_congestion < known_congestion or
+                    detour_score < known_detour or
                     (
-                        wait_congestion == known_congestion and
-                        priority_count > known_priority
+                        detour_score == known_detour and
+                        (
+                            wait_congestion < known_congestion or
+                            (
+                                wait_congestion == known_congestion and
+                                priority_count > known_priority
+                            )
+                        )
                     )
                 ):
-                    best_score[wait_state] = (wait_congestion, priority_count)
+                    best_score[wait_state] = (
+                        detour_score,
+                        wait_congestion,
+                        priority_count,
+                    )
                     parent[wait_state] = current_state
                     heapq.heappush(
                         queue,
-                        (turn + 1, wait_congestion, -priority_count, pos),
+                        (
+                            turn + 1,
+                            detour_score,
+                            wait_congestion,
+                            -priority_count,
+                            pos,
+                        ),
                     )
 
         return None
 
     def reserve_path(self, path: RoutedPath) -> None:
+        """Reserve nodes and links used by a computed path."""
         states = [(self.start_hub, 0)] + path
 
         for state in states:
@@ -237,6 +325,7 @@ class Graph:
             )
 
     def routing(self) -> list[RoutedPath]:
+        """Compute paths for every drone in the simulation."""
         self.reservation_table: dict[tuple[str, int], int] = {}
         self.link_reservation_table: dict[tuple[LinkKey, int], int] = {}
         paths: list[RoutedPath] = []
@@ -251,6 +340,7 @@ class Graph:
         return paths
 
     def print_log(self, paths: list[RoutedPath]) -> int:
+        """Print the per-turn movement log and return its length."""
         turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
 
         for drone_id, path_data in enumerate(paths):
