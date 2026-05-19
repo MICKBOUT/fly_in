@@ -439,7 +439,6 @@ class Graph:
                 turns[turn - 1].append(f"D{drone_id + 1}-{pos}")
 
         for index, turn_list in enumerate(turns):
-            print(index)
             joined_turn = " ".join(turn_list)
             if joined_turn:
                 print(joined_turn)
