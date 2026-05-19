@@ -342,11 +342,14 @@ class Graph:
     def print_log(self, paths: list[RoutedPath]) -> int:
         """Print the per-turn movement log and return its length."""
         turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
+        hub_connection = {(self.start_hub, 0): self.nb_drones}
 
         for drone_id, path_data in enumerate(paths):
             pos = self.start_hub
             pos_turn = 0
             for node, turn in path_data:
+                hub_connection[(node, turn)] = hub_connection.get(
+                    (node, turn), 0) + 1
                 if node == pos:
                     pos_turn = turn
                     continue
@@ -357,11 +360,17 @@ class Graph:
                 pos_turn = turn
                 turns[turn - 1].append(f"D{drone_id + 1}-{pos}")
 
-        for turn_list in turns:
+        for index, turn_list in enumerate(turns):
+            print(index)
             joined_turn = " ".join(turn_list)
             if joined_turn:
                 print(joined_turn)
 
         nb_turn = len(turns)
         print(f"all drone(s) found the exit in {nb_turn} turn(s)")
+        # for turn in range(nb_turn + 1):
+        #     for node in self.nodes.keys():
+        #         print(f"{node}: {hub_connection.get((node, turn), 0)}/"
+        #               f"{self.nodes[node].max_drones}")
+
         return nb_turn

@@ -1,9 +1,8 @@
-"""Application entrypoint for the Fly-In project."""
-
 from chose_map import Display_Chooser, get_folder
 from display import Display
 from graph import Graph
 from parsing import parsing_file
+from connected import connected_graph
 
 
 def main() -> None:
@@ -32,6 +31,10 @@ def main() -> None:
         return
 
     graph = Graph(data)
+    if not connected_graph(graph):
+        print("Error: entry and exit not connected")
+        return
+
     paths = graph.routing()
     nb_turn = graph.print_log(paths)
 
