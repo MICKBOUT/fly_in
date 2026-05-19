@@ -292,7 +292,7 @@ class MapParser:
         message: str,
     ) -> ValueError:
         """Build a consistent parser error with line context."""
-        return ValueError(f"line {line_number}: {message}: {line}")
+        return ValueError(f"(line {line_number}) {message}: {line}")
 
 
 def parsing_file(path: str = "maps/easy/01_linear_path.txt") -> ParsedData:

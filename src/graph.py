@@ -15,10 +15,43 @@ QueueItem = tuple[int, int, float, int, str]
 
 
 class Graph:
-    """Build the routing graph and compute drone paths."""
+    """Initialize a Graph instance from parsed map data.
+
+    Constructs the routing graph by creating nodes from hub data and
+    initializing neighbor connections. Validates all hubs and connections,
+    ensuring no self-loops, duplicate connections, or references to
+    undefined hubs. Handles blocked zones by tracking them separately.
+
+    Args:
+        data: Parsed map data containing drone count, start/end hubs,
+            hub definitions with coordinates and metadata, and connection
+            specifications with capacities.
+
+    Raises:
+        ValueError: If a connection references an undefined hub, creates
+            a self-loop, is duplicated, or involves blocked zones.
+    """
 
     def __init__(self, data: ParsedData) -> None:
-        """Create the graph from parsed map data."""
+        """Initialize a graph from parsed map data.
+
+        Creates a graph representation of hubs and their connections from
+        parsed map data. Sets up nodes with their metadata and validates all
+        connections.
+
+        Args:
+            data: ParsedData dictionary containing:
+                - nb_drones (int): Number of drones
+                - start_hub (str): Starting hub identifier
+                - end_hub (str): Ending hub identifier
+                - hubs (dict): Hub definitions with metadata
+                - connections (list): Connection definitions between hubs
+
+        Raises:
+            ValueError: If a node in a connection is not defined as a hub, if a
+                hub is connected to itself, if a connection is defined multiple
+                times, or if a connection involves a blocked zone hub.
+        """
         self.nb_drones = data["nb_drones"]
         self.start_hub = data["start_hub"]
         self.end_hub = data["end_hub"]
@@ -122,7 +155,23 @@ class Graph:
         parent: dict[State, State | None],
         next_node: str,
     ) -> int:
-        """Score a move so waiting beats useless detours on equal turns."""
+        """Calculate movement penalty to prefer waiting over useless detours.
+
+        Applies penalties to moves that revisit recent nodes or create cycles,
+        encouraging the pathfinding algorithm to wait rather than make wasteful
+        detours when the number of turns is equal.
+
+        Args:
+            current_state: The current state in the search path.
+            parent: A mapping of each state to its parent state in the search
+                tree.
+            next_node: The identifier of the node to move to.
+
+        Returns:
+            An integer penalty score. Returns 0 if current_state has no parent.
+            Adds 2 if next_node is the immediately previous node, and adds 1
+            if next_node appears anywhere in the ancestor chain.
+        """
         previous_state = parent[current_state]
         if previous_state is None:
             return 0
@@ -143,7 +192,28 @@ class Graph:
         return penalty
 
     def find_path(self) -> RouteData | None:
-        """Find one path while respecting current reservations."""
+        """Find one path while respecting current reservations.
+
+        Uses a priority queue-based search algorithm to find an optimal path
+        from start_hub to end_hub. The search respects drone capacity
+        constraints at nodes and link availability constraints between nodes.
+
+        The algorithm optimizes for multiple criteria in order of preference:
+        1. Minimum detour score (path efficiency penalty)
+        2. Minimum congestion score (based on reservation density)
+        3. Maximum priority bonus (preference for higher priority nodes)
+
+        The search maintains:
+        - A visited set to avoid revisiting states
+        - A best_score dict to track the best known score for each state
+        - A parent dict to reconstruct the path upon reaching the destination
+
+        Returns:
+            RouteData | None: A tuple of (turn, path) where turn is the number
+                of turns to reach the destination and path is the list of
+                states (excluding the start node), or None if no valid path
+                exists.
+        """
         start_state = (self.start_hub, 0)
         visited: set[State] = set()
         start_priority = self.priority_bonus(self.start_hub)
@@ -173,12 +243,9 @@ class Graph:
                 (10**9, float("inf"), -1),
             )
             if (
-                detour_score > best_detour or
-                (
-                    detour_score == best_detour and
-                    (
-                        congestion_score > best_congestion or
-                        (
+                detour_score > best_detour or (
+                    detour_score == best_detour and (
+                        congestion_score > best_congestion or (
                             congestion_score == best_congestion and
                             priority_count < best_priority
                         )
@@ -227,12 +294,9 @@ class Graph:
                     known_priority,
                 ) = best_score.get(state, (10**9, float("inf"), -1))
                 if (
-                    next_detour > known_detour or
-                    (
-                        next_detour == known_detour and
-                        (
-                            next_congestion > known_congestion or
-                            (
+                    next_detour > known_detour or (
+                        next_detour == known_detour and (
+                            next_congestion > known_congestion or (
                                 next_congestion == known_congestion and
                                 next_priority <= known_priority
                             )
@@ -242,44 +306,27 @@ class Graph:
                     continue
 
                 best_score[state] = (
-                    next_detour,
-                    next_congestion,
-                    next_priority,
-                )
+                    next_detour, next_congestion, next_priority)
                 parent[state] = current_state
-                heapq.heappush(
-                    queue,
-                    (
-                        next_turn,
-                        next_detour,
-                        next_congestion,
-                        -next_priority,
-                        next_node,
-                    ),
-                )
+                heapq.heappush(queue, (
+                    next_turn, next_detour,
+                    next_congestion, -next_priority, next_node,
+                ),)
 
             wait_state = (pos, turn + 1)
             wait_count = self.reservation_table.get(wait_state, 0)
             if wait_count + 1 <= self.nodes[pos].max_drones:
-                wait_congestion = (
-                    congestion_score +
-                    (
+                wait_congestion = (congestion_score + (
                         self.reservation_table.get(wait_state, 0) /
                         max(self.nodes[pos].max_drones, 1)
                     )
                 )
-                (
-                    known_detour,
-                    known_congestion,
-                    known_priority,
-                ) = best_score.get(wait_state, (10**9, float("inf"), -1))
+                (known_detour, known_congestion, known_priority
+                 ) = best_score.get(wait_state, (10**9, float("inf"), -1))
                 if (
-                    detour_score < known_detour or
-                    (
-                        detour_score == known_detour and
-                        (
-                            wait_congestion < known_congestion or
-                            (
+                    detour_score < known_detour or (
+                        detour_score == known_detour and (
+                            wait_congestion < known_congestion or (
                                 wait_congestion == known_congestion and
                                 priority_count > known_priority
                             )
@@ -287,26 +334,38 @@ class Graph:
                     )
                 ):
                     best_score[wait_state] = (
-                        detour_score,
-                        wait_congestion,
-                        priority_count,
+                        detour_score, wait_congestion, priority_count,
                     )
                     parent[wait_state] = current_state
-                    heapq.heappush(
-                        queue,
-                        (
-                            turn + 1,
-                            detour_score,
-                            wait_congestion,
-                            -priority_count,
-                            pos,
-                        ),
+                    heapq.heappush(queue, (
+                        turn + 1, detour_score, wait_congestion,
+                        -priority_count, pos,),
                     )
 
         return None
 
     def reserve_path(self, path: RoutedPath) -> None:
-        """Reserve nodes and links used by a computed path."""
+        """Reserve nodes and links used by a computed path.
+
+        Args:
+            path (RoutedPath): The computed path containing a sequence of
+                (node, turn) tuples to be reserved in the network.
+
+        Returns:
+            None
+
+        Raises:
+            None
+
+        Note:
+            This method updates two reservation tables:
+            - reservation_table: Tracks reservation count for each node state
+            - link_reservation_table: Tracks reservation count for each link
+                state
+
+            The path is processed starting from self.start_hub, and consecutive
+                state pairs are used to identify links between nodes.
+        """
         states = [(self.start_hub, 0)] + path
 
         for state in states:
@@ -340,7 +399,26 @@ class Graph:
         return paths
 
     def print_log(self, paths: list[RoutedPath]) -> int:
-        """Print the per-turn movement log and return its length."""
+        """
+        Print the per-turn movement log of drones and return the total number
+            of turns.
+
+        This method processes the movement paths of drones, logs their
+            movements per turn, and prints the results. It also tracks the
+            number of drones connected to each node at each turn.
+
+        Args:
+            paths (list[RoutedPath]): A list of paths for each drone, where
+                each path is a list of tuples containing a node and the
+                corresponding turn.
+
+        Returns:
+            int: The total number of turns taken for all drones to reach the
+                exit.
+
+        Raises:
+            ValueError: If the paths list is empty or if the turns are invalid.
+        """
         turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
         hub_connection = {(self.start_hub, 0): self.nb_drones}
 
