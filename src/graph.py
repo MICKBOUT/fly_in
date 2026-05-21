@@ -457,15 +457,5 @@ class Graph:
 
         nb_turn = len(turns)
         print(f"all drone(s) found the exit in {nb_turn} turn(s)")
-        for turn in range(nb_turn + 1):
-            print(turn)
-            for node in self.nodes.keys():
-                print(f"{node}: {hub_connection.get((node, turn), 0)}/"
-                      f"{self.nodes[node].max_drones}")
-            for nodes, value in self.restricted_connections.items():
-                left, right = self.link_key(*nodes)
-                print(f"{left}-{right}: "
-                      f"{hub_connection.get((left, right, turn), 0)}/"
-                      f"{value}")
 
         return nb_turn
