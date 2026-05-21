@@ -17,6 +17,7 @@ dependencies = [
     "flake8>=7.3.0",
     "mypy>=2.1.0",
     "pygame-ce>=2.5.7",
+    "snakeviz>=2.2.2",
 ]
 
 [project.optional-dependencies]

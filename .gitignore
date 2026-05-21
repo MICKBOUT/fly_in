@@ -7,3 +7,5 @@ env/
 venv/
 ENV/
 build_venv/
+
+profile.stats

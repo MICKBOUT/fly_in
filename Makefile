@@ -20,6 +20,11 @@ debug:
 	@echo "Running in debug mode..."
 	@uv run python -m pdb $(MAIN)
 
+
+profiler: install
+	uv run -m cProfile -o profile.stats $(MAIN) --profiler maps/challenger/01_the_impossible_dream.txt
+	snakeviz profile.stats
+
 clean:
 	@echo "Cleaning project..."
 	@uv clean

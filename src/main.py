@@ -38,23 +38,32 @@ def main() -> None:
         default="maps",
         help="Path to the folder where the maps difficulty are located"
     )
+    parser.add_argument(
+        "--profiler",
+        type=str,
+        help="path of the map to run the profiler on"
+    )
 
     args = parser.parse_args()
 
-    try:
-        maps_dict = get_folder(args.maps_folder)
-    except FileNotFoundError:
-        print(f"{Error_tag} folder '{args.maps_folder}' not found")
-        return
-    except NotADirectoryError:
-        print(f"{Error_tag} The path is not a directory")
-        return
-    except (ValueError, Exception) as error:
-        print(Error_tag, error)
-        return
+    if args.profiler:
+        map_path = args.profiler
+    else:
+        try:
+            maps_dict = get_folder(args.maps_folder)
+        except FileNotFoundError:
+            print(f"{Error_tag} folder '{args.maps_folder}' not found")
+            return
+        except NotADirectoryError:
+            print(f"{Error_tag} The path is not a directory")
+            return
+        except (ValueError, Exception) as error:
+            print(Error_tag, error)
+            return
 
-    chooser = Display_Chooser(maps_dict)
-    map_path = chooser.main()
+        chooser = Display_Chooser(maps_dict)
+        map_path = chooser.main()
+
     if map_path is None:
         return
 
@@ -79,7 +88,8 @@ def main() -> None:
         graph.start_hub,
         nb_turn,
     )
-    display.main()
+    if not args.profiler:
+        display.main()
 
 
 if __name__ == "__main__":
