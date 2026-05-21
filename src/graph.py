@@ -113,7 +113,15 @@ class Graph:
             self.neighbor[left][right] = capacity
             self.neighbor[right][left] = capacity
 
-    def link_key(self, left: str, right: str) -> LinkKey:
+        self.restricted_connections = {}
+        for name, node_data in self.nodes.items():
+            if node_data.zone == "restricted":
+                for neighbor in self.neighbor[name].keys():
+                    self.restricted_connections[
+                        (name, neighbor)] = self.neighbor[name][neighbor]
+
+    @staticmethod
+    def link_key(left: str, right: str) -> LinkKey:
         """Return the normalized key for an undirected link."""
         if left < right:
             return left, right
@@ -420,34 +428,44 @@ class Graph:
             ValueError: If the paths list is empty or if the turns are invalid.
         """
         turns: list[list[str]] = [[] for _ in range(paths[-1][-1][1])]
-        hub_connection = {(self.start_hub, 0): self.nb_drones}
+        hub_connection: dict[tuple[str, int] | tuple[str, str, int], int] = {
+            (self.start_hub, 0): self.nb_drones}
 
         for drone_id, path_data in enumerate(paths):
             pos = self.start_hub
             pos_turn = 0
             for node, turn in path_data:
+                print((pos, node, turn))
                 hub_connection[(node, turn)] = hub_connection.get(
                     (node, turn), 0) + 1
-                if node == pos:
+                if node == pos:  # no move
                     pos_turn = turn
                     continue
                 if self.move_cost(node) == 2:
-                    connection = f"{pos}-{node}"
-                    turns[pos_turn].append(f"D{drone_id + 1}-{connection}")
+                    turns[pos_turn].append(f"D{drone_id + 1}-{pos}-{node}")
+                    n1, n2 = self.link_key(pos, node)
+                    hub_connection[(n1, n2, turn - 1)] = hub_connection.get(
+                        (n1, n2, turn - 1), 0) + 1
                 pos = node
                 pos_turn = turn
                 turns[turn - 1].append(f"D{drone_id + 1}-{pos}")
 
-        for index, turn_list in enumerate(turns):
+        for turn_list in turns:
             joined_turn = " ".join(turn_list)
             if joined_turn:
                 print(joined_turn)
 
         nb_turn = len(turns)
         print(f"all drone(s) found the exit in {nb_turn} turn(s)")
-        # for turn in range(nb_turn + 1):
-        #     for node in self.nodes.keys():
-        #         print(f"{node}: {hub_connection.get((node, turn), 0)}/"
-        #               f"{self.nodes[node].max_drones}")
+        for turn in range(nb_turn + 1):
+            print(turn)
+            for node in self.nodes.keys():
+                print(f"{node}: {hub_connection.get((node, turn), 0)}/"
+                      f"{self.nodes[node].max_drones}")
+            for nodes, value in self.restricted_connections.items():
+                left, right = self.link_key(*nodes)
+                print(f"{left}-{right}: "
+                      f"{hub_connection.get((left, right, turn), 0)}/"
+                      f"{value}")
 
         return nb_turn

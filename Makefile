@@ -6,11 +6,7 @@ install:
 	uv sync
 
 run:
-	@echo "Running fly-in..."
-	@uv run $(MAIN)
-
-pygame:
-	@uv run $(SRC_DIR)/display.py
+	uv run $(MAIN)
 
 lint: 
 	uv run flake8 $(SRC_DIR)

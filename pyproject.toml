@@ -1,5 +1,5 @@
 [project]
-name = "call-me-maybe"
+name = "fly-in"
 version = "1.0.0"
 authors = [
   { name="mboutte", email="mboutte@student.42lyon.fr" },
@@ -14,9 +14,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "flake8",
-    "mypy",
-    "pygame",
+    "flake8>=7.3.0",
+    "mypy>=2.1.0",
+    "pygame-ce>=2.5.7",
 ]
 
 [project.optional-dependencies]

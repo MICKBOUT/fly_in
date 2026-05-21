@@ -77,7 +77,7 @@ class Drone(pygame.sprite.Sprite):
         self.loaded_img = drone_png
         self.image = pygame.transform.scale_by(
             self.loaded_img, self.BASE_RESCALE)
-        self.rect = self.image.get_rect(center=(0, 0))
+        self.rect: pygame.Rect = self.image.get_rect(center=(0, 0))
 
     def update(self, zoom: float, turn: int, dt: float) -> None:
         """Advance the drone toward its target for the current turn.
@@ -243,7 +243,7 @@ class Display:
         pygame.display.set_caption("FLY IN !!!")
 
         self.font = pygame.font.SysFont("Arial", 48)
-        self.screen = pygame.display.set_mode((0, 0), 0, vsync=1)
+        self.screen = pygame.display.set_mode()
         self.clock = pygame.time.Clock()
         self.zoom = 1.0
         self.turn = 0

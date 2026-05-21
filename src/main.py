@@ -1,3 +1,5 @@
+from argparse import ArgumentParser
+
 from chose_map import Display_Chooser, get_folder
 from display import Display
 from graph import Graph
@@ -28,10 +30,21 @@ def main() -> None:
         - The entry and exit nodes are not connected in the graph
     """
     Error_tag = "\033[31mError\033[0m:"
+
+    parser = ArgumentParser(description="fly-in")
+    parser.add_argument(
+        "--maps_folder",
+        type=str,
+        default="maps",
+        help="Path to the folder where the maps difficulty are located"
+    )
+
+    args = parser.parse_args()
+
     try:
-        maps_dict = get_folder()
+        maps_dict = get_folder(args.maps_folder)
     except FileNotFoundError:
-        print(f"{Error_tag} folder 'maps' not found")
+        print(f"{Error_tag} folder '{args.maps_folder}' not found")
         return
     except NotADirectoryError:
         print(f"{Error_tag} The path is not a directory")

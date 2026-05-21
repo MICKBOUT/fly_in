@@ -119,8 +119,8 @@ class MapParser:
         if match is None:
             raise self.parse_error(
                 line_number,
-                line,
                 "expected nb_drones on the first line",
+                line,
             )
         return int(match.group("nb_drones"))
 
@@ -139,8 +139,8 @@ class MapParser:
 
         raise self.parse_error(
             line_number,
-            line,
             "line does not match the format",
+            line,
         )
 
     def parse_hub(
@@ -155,14 +155,14 @@ class MapParser:
         if hub_name in self.hubs:
             raise self.parse_error(
                 line_number,
-                line,
                 f"hub '{hub_name}' is defined more than once",
+                line,
             )
 
         try:
             metadata = self.read_node_metadata(data["metadata"])
         except ValueError as error:
-            raise self.parse_error(line_number, line, str(error)) from error
+            raise self.parse_error(line_number, str(error), line) from error
 
         self.hubs[hub_name] = {
             "name": hub_name,
@@ -175,16 +175,16 @@ class MapParser:
             if self.start_hub is not None:
                 raise self.parse_error(
                     line_number,
-                    line,
                     "start_hub defined twice in the file",
+                    line,
                 )
             self.start_hub = hub_name
         elif data["type"] == "end_hub":
             if self.end_hub is not None:
                 raise self.parse_error(
                     line_number,
-                    line,
                     "end_hub defined twice in the file",
+                    line,
                 )
             self.end_hub = hub_name
 
@@ -201,16 +201,16 @@ class MapParser:
         if left not in self.hubs or right not in self.hubs:
             raise self.parse_error(
                 line_number,
-                line,
                 "connection must link only previously defined hubs",
+                line,
             )
 
         connection_key = (left, right) if left < right else (right, left)
         if connection_key in self.seen_connections:
             raise self.parse_error(
                 line_number,
-                line,
                 f"connection '{left}-{right}' is duplicated",
+                line,
             )
         self.seen_connections.add(connection_key)
 
@@ -219,7 +219,7 @@ class MapParser:
                 data["metadata"]
             )
         except ValueError as error:
-            raise self.parse_error(line_number, line, str(error)) from error
+            raise self.parse_error(line_number, str(error), line) from error
 
         self.connections.append(
             {
@@ -288,10 +288,12 @@ class MapParser:
     def parse_error(
         self,
         line_number: int,
-        line: str,
         message: str,
+        line: str,
     ) -> ValueError:
         """Build a consistent parser error with line context."""
+        start_tag, end_tag = "\033[1m\033[4m\033[91m", "\033[0m"
+        line = start_tag + line + end_tag
         return ValueError(f"(line {line_number}) {message}: {line}")
 
 
