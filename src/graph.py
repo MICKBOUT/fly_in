@@ -435,7 +435,6 @@ class Graph:
             pos = self.start_hub
             pos_turn = 0
             for node, turn in path_data:
-                print((pos, node, turn))
                 hub_connection[(node, turn)] = hub_connection.get(
                     (node, turn), 0) + 1
                 if node == pos:  # no move
